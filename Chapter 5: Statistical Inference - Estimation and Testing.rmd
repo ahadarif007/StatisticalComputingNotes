@@ -1,5 +1,5 @@
 ---
-title: "Chapter 5: Statistical Inference — Estimation and Testing"
+title: "Chapter 5: Statistical Inference - Estimation and Testing"
 author: ""
 date: "`r Sys.Date()`"
 output:
