@@ -1,0 +1,430 @@
+---
+title: "Chapter 10: Advanced Likelihood Methods and Numerical Optimisation"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+
+# Shared dataset used throughout
+obs_data <- c(10, 12, 11, 13, 12)
+
+# Negative log-likelihood (Normal, unknown μ, σ fixed at 1)
+neg_log_lik <- function(mu, data = obs_data, sigma = 1) {
+  -sum(dnorm(data, mean = mu, sd = sigma, log = TRUE))
+}
+```
+
+------------------------------------------------------------------------
+
+# Extended Distributions
+
+## Gamma Distribution
+
+The **Gamma distribution** $\Gamma(\alpha, \beta)$ is a flexible, continuous distribution for modelling positive-valued data — especially waiting times, rainfall amounts, or insurance claims.
+
+$$f(x \mid \alpha, \beta) = \frac{x^{\alpha - 1} e^{-x/\beta}}{\beta^\alpha \Gamma(\alpha)}, \quad x > 0$$
+
+| Parameter | Name | Role |
+|-----------|------|------|
+| $\alpha > 0$ | **Shape** | Controls the form of the curve |
+| $\beta > 0$ | **Scale** | Stretches or compresses the distribution |
+
+| Property | Value |
+|----------|-------|
+| Mean | $\alpha\beta$ |
+| Variance | $\alpha\beta^2$ |
+| Special cases | $\alpha=1$ → Exponential; $\alpha=k/2$, $\beta=2$ → Chi-squared with $k$ df |
+
+```{r gamma-plot, fig.align='center', fig.width=9, fig.height=4}
+x <- seq(0, 20, length.out = 300)
+
+params <- list(
+  list(shape = 1, scale = 2, label = "α=1, β=2 (Exponential)"),
+  list(shape = 2, scale = 2, label = "α=2, β=2"),
+  list(shape = 5, scale = 1, label = "α=5, β=1"),
+  list(shape = 9, scale = 0.5, label = "α=9, β=0.5")
+)
+
+colours <- c("steelblue", "seagreen", "mediumpurple", "tomato")
+
+plot(NULL, xlim = c(0, 20), ylim = c(0, 0.55),
+     main = "Gamma Distribution: Effect of Shape and Scale",
+     xlab = "x", ylab = "Density")
+
+for (i in seq_along(params)) {
+  p <- params[[i]]
+  lines(x, dgamma(x, shape = p$shape, scale = p$scale),
+        col = colours[i], lwd = 2)
+}
+
+legend("topright",
+       legend = sapply(params, `[[`, "label"),
+       col    = colours,
+       lwd    = 2, bty = "n", cex = 0.85)
+```
+
+------------------------------------------------------------------------
+
+# Properties of MLE
+
+## Consistency
+
+$$\hat{\theta}_n \xrightarrow{p} \theta \quad \text{as } n \to \infty$$
+
+As sample size grows, the MLE **converges in probability** to the true parameter. It will not systematically over- or under-estimate for large $n$.
+
+```{r consistency-demo, fig.align='center', fig.width=8, fig.height=4}
+set.seed(42)
+true_mu  <- 11.6    # true mean
+ns       <- c(5, 10, 30, 100, 500, 2000)
+mle_ests <- sapply(ns, function(n) {
+  mean(rnorm(n, mean = true_mu, sd = 1))   # MLE for Normal μ = sample mean
+})
+
+plot(ns, mle_ests,
+     type = "b", pch = 16,
+     col  = "steelblue", lwd = 2,
+     log  = "x",
+     main = "MLE Consistency: Estimate Converges to True μ",
+     xlab = "Sample Size (log scale)",
+     ylab = "MLE Estimate of μ",
+     ylim = c(10.5, 12.8))
+abline(h = true_mu, col = "darkred", lwd = 2, lty = 2)
+legend("topright",
+       legend = c("MLE estimate", paste0("True μ = ", true_mu)),
+       col    = c("steelblue", "darkred"),
+       lty    = c(1, 2), pch = c(16, NA), lwd = 2, bty = "n")
+```
+
+## Efficiency
+
+The MLE achieves the **Cramér-Rao lower bound** — no unbiased estimator can have smaller variance asymptotically.
+
+$$\text{Var}(\hat{\theta}) \geq \frac{1}{\mathcal{I}(\theta)}, \quad \mathcal{I}(\theta) = -E\!\left[\frac{d^2\ell}{d\theta^2}\right]$$
+
+where $\mathcal{I}(\theta)$ is the **Fisher information**. More information → lower bound → more precise estimate.
+
+## Asymptotic Normality
+
+For large $n$, the MLE is approximately normally distributed:
+
+$$\hat{\theta} \;\dot{\sim}\; \mathcal{N}\!\left(\theta,\; \frac{1}{n\,\mathcal{I}(\theta)}\right)$$
+
+This justifies using Normal-based confidence intervals for MLEs in large samples and underlies the **Wald test**.
+
+```{r asymptotic-normality, fig.align='center', fig.width=9, fig.height=4}
+set.seed(42)
+
+n_sims   <- 5000
+ns_demo  <- c(10, 100)
+par(mfrow = c(1, 2))
+
+for (n in ns_demo) {
+  mle_dist <- replicate(n_sims, mean(rnorm(n, mean = 0, sd = 1)))
+  hist(mle_dist,
+       breaks  = 50,
+       col     = "steelblue",
+       border  = "white",
+       freq    = FALSE,
+       main    = paste0("MLE Distribution (n = ", n, ")"),
+       xlab    = expression(hat(mu)))
+  curve(dnorm(x, mean = 0, sd = 1 / sqrt(n)),
+        add = TRUE, col = "darkred", lwd = 2)
+}
+
+par(mfrow = c(1, 1))
+```
+
+------------------------------------------------------------------------
+
+# Likelihood-Based Testing
+
+## Likelihood Ratio Test (LRT)
+
+The **LRT** formally compares two nested models:
+
+- $M_0$: restricted model (fewer parameters) — log-likelihood $\ell_0$
+- $M_1$: full model (more parameters) — log-likelihood $\ell_1$
+
+$$\Lambda = 2\bigl(\ell_1 - \ell_0\bigr) \;\dot{\sim}\; \chi^2_k \quad \text{under } H_0$$
+
+where $k$ = number of additional parameters in $M_1$.
+
+**Decision rule:** Reject $H_0$ if $\Lambda > \chi^2_{k,\,1-\alpha}$.
+
+```{r lrt-example}
+# Fit two models via MLE and compare with LRT
+# H0: μ = 11 (restricted)
+# H1: μ = x̄  (unrestricted, MLE)
+
+mu_restricted   <- 11
+mu_mle          <- mean(obs_data)
+
+ll_restricted   <- sum(dnorm(obs_data, mean = mu_restricted, sd = 1, log = TRUE))
+ll_full         <- sum(dnorm(obs_data, mean = mu_mle,        sd = 1, log = TRUE))
+
+LRT_stat        <- 2 * (ll_full - ll_restricted)
+p_value_lrt     <- pchisq(LRT_stat, df = 1, lower.tail = FALSE)
+
+cat("H0: μ =", mu_restricted, " | MLE: μ̂ =", mu_mle, "\n")
+cat("Log-lik (restricted) :", round(ll_restricted, 4), "\n")
+cat("Log-lik (full MLE)   :", round(ll_full, 4), "\n")
+cat("LRT statistic (Λ)    :", round(LRT_stat, 4), "\n")
+cat("p-value              :", round(p_value_lrt, 4), "\n")
+cat("Decision             :", ifelse(p_value_lrt < 0.05,
+                                     "Reject H0", "Fail to reject H0"), "\n")
+```
+
+## Profile Likelihood
+
+**Profile likelihood** is used when there are multiple parameters. One parameter of interest $\psi$ is varied; the **nuisance parameters** $\lambda$ are maximised out at each value of $\psi$:
+
+$$\ell_p(\psi) = \max_{\lambda}\; \ell(\psi, \lambda \mid \mathbf{x})$$
+
+This produces a 1-D curve in $\psi$, regardless of how many other parameters exist, making inference tractable.
+
+```{r profile-likelihood, fig.align='center', fig.width=8, fig.height=4}
+# Profile likelihood for μ (varying μ, estimating σ at each μ)
+mu_grid    <- seq(9, 15, length.out = 200)
+profile_ll <- numeric(length(mu_grid))
+
+for (i in seq_along(mu_grid)) {
+  mu_fixed <- mu_grid[i]
+  # Profile out σ: find σ that maximises likelihood at this μ
+  opt_sigma <- optimize(
+    function(sigma) -sum(dnorm(obs_data, mean = mu_fixed, sd = sigma, log = TRUE)),
+    lower = 0.01, upper = 10
+  )
+  profile_ll[i] <- -opt_sigma$objective
+}
+
+plot(mu_grid, profile_ll,
+     type = "l", lwd = 2, col = "steelblue",
+     main = "Profile Log-Likelihood for μ\n(σ optimised at each μ)",
+     xlab = expression(mu),
+     ylab = "Profile Log-Likelihood")
+
+# 95% likelihood-based CI: drop by qchisq(0.95,1)/2 ≈ 1.92
+ci_threshold <- max(profile_ll) - qchisq(0.95, df = 1) / 2
+abline(h = ci_threshold, col = "darkred",  lty = 2, lwd = 1.5)
+abline(v = mean(obs_data), col = "seagreen", lty = 2, lwd = 1.5)
+
+legend("bottomleft",
+       legend = c("Profile Log-Lik",
+                  paste0("MLE: μ̂ = ", mean(obs_data)),
+                  "95% CI threshold"),
+       col    = c("steelblue", "seagreen", "darkred"),
+       lty    = 1, lwd = 2, bty = "n")
+```
+
+## Likelihood-Based Confidence Intervals
+
+The **likelihood interval** at level $1-\alpha$ is the set of $\theta$ values with relative log-likelihood above a threshold:
+
+$$\left\{\theta : 2\bigl[\ell(\hat{\theta}) - \ell(\theta)\bigr] \leq \chi^2_{1,\,1-\alpha}\right\}$$
+
+For 95% CI: threshold = $\chi^2_{1, 0.95}/2 \approx 1.92$ log-likelihood units below the maximum.
+
+------------------------------------------------------------------------
+
+# Numerical Optimisation Algorithms
+
+When analytical derivatives are unavailable, numerical optimisation finds the MLE iteratively.
+
+## Gradient Ascent / Descent
+
+The simplest idea: move in the direction of the gradient by a small step $\eta$ (the **learning rate**):
+
+$$\theta^{(t+1)} = \theta^{(t)} + \eta \cdot \frac{d\ell}{d\theta}\bigg|_{\theta^{(t)}}$$
+
+- **Gradient ascent** maximises (likelihood).
+- **Gradient descent** minimises (loss/negative log-likelihood).
+
+Slow when the gradient is flat; can overshoot when the gradient is steep.
+
+## Newton's Method
+
+Uses both the **gradient** (first derivative) and **curvature** (second derivative) for faster convergence:
+
+$$\theta^{(t+1)} = \theta^{(t)} - \frac{\ell'(\theta^{(t)})}{\ell''(\theta^{(t)})}$$
+
+Converges **quadratically** near the maximum — much faster than gradient ascent — but requires computing (or approximating) second derivatives.
+
+## BFGS
+
+**Broyden–Fletcher–Goldfarb–Shanno (BFGS)** is a *quasi-Newton* method: it approximates the inverse Hessian (second-derivative matrix) iteratively, avoiding expensive exact computation.
+
+- Fast and accurate for smooth, well-behaved functions.
+- Default choice in `optim()` for multiparameter problems.
+
+## Nelder–Mead (Simplex)
+
+A **derivative-free** method that maintains a geometric shape (simplex) in parameter space and iteratively reflects, expands, or contracts it towards the optimum.
+
+- Robust when derivatives are unavailable or unreliable.
+- Slower than BFGS; default when no gradient is specified in `optim()`.
+
+| Algorithm | Needs gradient? | Convergence speed | Best for |
+|-----------|----------------|------------------|---------|
+| Gradient ascent | Yes | Slow | Simple illustration |
+| Newton's method | Yes (+ Hessian) | Very fast | Smooth, low-dim problems |
+| BFGS | No (approximates) | Fast | Most smooth MLE problems |
+| Nelder-Mead | No | Moderate | Non-smooth or high-dim |
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## `optim()` with Multiple Methods
+
+```{r optim-methods}
+start_val <- 10
+
+# --- BFGS ---
+result_bfgs <- optim(par    = start_val,
+                     fn     = neg_log_lik,
+                     method = "BFGS")
+
+# --- Nelder-Mead ---
+result_nm   <- optim(par    = start_val,
+                     fn     = neg_log_lik,
+                     method = "Nelder-Mead")
+
+cat("True MLE (sample mean):", mean(obs_data), "\n\n")
+cat("BFGS estimate     :", round(result_bfgs$par, 6),
+    "| converged:", result_bfgs$convergence == 0, "\n")
+cat("Nelder-Mead est.  :", round(result_nm$par,   6),
+    "| converged:", result_nm$convergence == 0, "\n")
+```
+
+## Convergence Diagnostics
+
+Always inspect the `optim()` output — a result without convergence is meaningless.
+
+```{r convergence-diagnostics}
+# Run with trace output to watch the optimiser work
+result_trace <- optim(par     = 10,
+                      fn      = neg_log_lik,
+                      method  = "BFGS",
+                      control = list(trace = 1, REPORT = 1))
+
+cat("\nConvergence code:", result_trace$convergence,
+    "(0 = success)\n")
+cat("Final neg-log-lik:", round(result_trace$value, 6), "\n")
+cat("MLE estimate     :", round(result_trace$par, 6), "\n")
+```
+
+### Convergence codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | ✅ Successful convergence |
+| `1` | Iteration limit reached — increase `maxit` |
+| `10` | Degenerate Nelder-Mead simplex |
+| `51/52` | Warning from L-BFGS-B — check bounds |
+
+## Likelihood Profiling and LRT
+
+```{r profile-lrt, fig.align='center', fig.width=8, fig.height=4}
+# Likelihood profile across a parameter grid
+mu_grid       <- seq(9, 15, length.out = 100)
+profile_vals  <- sapply(mu_grid, function(mu) -neg_log_lik(mu))
+
+# Maximum log-likelihood
+max_ll        <- max(profile_vals)
+
+# Relative log-likelihood (drop from maximum)
+rel_ll        <- profile_vals - max_ll
+
+plot(mu_grid, rel_ll,
+     type = "l", lwd = 2, col = "steelblue",
+     main = "Relative Log-Likelihood Profile",
+     xlab = expression(mu),
+     ylab = expression(ell(mu) - ell(hat(mu))))
+
+# 95% CI boundary (Wilks' theorem: drop of qchisq(0.95,1)/2 ≈ 1.92)
+ci_drop <- -qchisq(0.95, df = 1) / 2
+abline(h = ci_drop, col = "darkred", lty = 2, lwd = 2)
+abline(v = mean(obs_data), col = "seagreen", lty = 2, lwd = 1.5)
+
+# Shade the 95% likelihood CI region
+ci_region <- mu_grid[rel_ll >= ci_drop]
+abline(v = range(ci_region), col = "grey50", lty = 3, lwd = 1.5)
+
+legend("bottomleft",
+       legend = c("Rel. Log-Likelihood",
+                  paste0("MLE = ", mean(obs_data)),
+                  "95% CI boundary (−1.92)",
+                  paste0("95% CI: [", round(min(ci_region), 2),
+                         ", ", round(max(ci_region), 2), "]")),
+       col    = c("steelblue", "seagreen", "darkred", "grey50"),
+       lty    = c(1, 2, 2, 3), lwd = 2, bty = "n", cex = 0.85)
+```
+
+## Multiparameter Optimisation
+
+For problems with two parameters (e.g., estimating both $\mu$ and $\sigma$):
+
+```{r multiparameter-optim}
+# Negative log-likelihood for Normal with both μ and σ unknown
+neg_ll_2param <- function(params) {
+  mu    <- params[1]
+  sigma <- params[2]
+  if (sigma <= 0) return(Inf)    # σ must be positive
+  -sum(dnorm(obs_data, mean = mu, sd = sigma, log = TRUE))
+}
+
+result_2d <- optim(par    = c(mu = 10, sigma = 2),   # initial guesses
+                   fn     = neg_ll_2param,
+                   method = "BFGS",
+                   hessian = TRUE)    # request Hessian for SEs
+
+cat("MLE μ̂     :", round(result_2d$par["mu"],    4), "\n")
+cat("MLE σ̂     :", round(result_2d$par["sigma"], 4), "\n")
+cat("True μ    :", mean(obs_data), "\n")
+cat("True σ_MLE:", round(sd(obs_data) * sqrt((length(obs_data)-1) /
+                           length(obs_data)), 4), "\n")
+
+# Standard errors from the Hessian (observed Fisher information)
+se <- sqrt(diag(solve(result_2d$hessian)))
+cat("SE(μ̂)     :", round(se["mu"],    4), "\n")
+cat("SE(σ̂)     :", round(se["sigma"], 4), "\n")
+```
+
+> **Hessian → Standard Errors:** The negative Hessian of the log-likelihood evaluated at $\hat{\theta}$ is the **observed Fisher information matrix** $\mathcal{I}(\hat{\theta})$. Its inverse gives the asymptotic covariance matrix of the MLE, so `sqrt(diag(solve(hessian)))` gives the standard errors.
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Gamma$(\alpha, \beta)$ | Flexible positive-data model; shape $\alpha$, scale $\beta$; includes Exponential and $\chi^2$ as special cases |
+| MLE consistency | $\hat{\theta} \to \theta$ as $n \to \infty$ |
+| MLE efficiency | Achieves Cramér-Rao lower bound; smallest possible asymptotic variance |
+| Asymptotic normality | $\hat{\theta} \approx \mathcal{N}(\theta, 1/n\mathcal{I}(\theta))$ for large $n$ |
+| LRT ($\Lambda$) | $2(\ell_1 - \ell_0) \sim \chi^2_k$; compares nested models |
+| Profile likelihood | Fix $\psi$, maximise over nuisance params; yields 1-D curve for inference |
+| Likelihood CI | $\theta$ values within 1.92 log-likelihood units of $\hat{\theta}$ (95%) |
+| Gradient descent | Step in gradient direction; slow but simple |
+| Newton's method | Uses gradient + curvature; fast quadratic convergence |
+| BFGS | Quasi-Newton; approximates Hessian; fast and practical |
+| Nelder-Mead | Derivative-free simplex; robust but slower |
+| R: `optim()` | `method="BFGS"` or `"Nelder-Mead"`; check `convergence == 0` |
+| R: `hessian=TRUE` | Returns observed Fisher information → SEs via `sqrt(diag(solve(H)))` |
+| Convergence code 0 | ✅ Optimisation succeeded; any other code requires investigation |

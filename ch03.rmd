@@ -1,0 +1,222 @@
+---
+title: "Chapter 3: Probability Theory and Bayesian Foundations"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Probability Axioms and Set Operations
+
+## Probability Axioms
+
+Probability is built on three foundational rules (Kolmogorov's axioms):
+
+| Axiom | Statement | Formal |
+|--------------------|------------------------------|----------------------|
+| **Non-negativity** | Probability is never negative | $P(A) \geq 0$ |
+| **Normalisation** | The certain event has probability 1 | $P(\Omega) = 1$ |
+| **Additivity** | Mutually exclusive events: add their probabilities | $P(A \cup B) = P(A) + P(B)$ if $A \cap B = \emptyset$ |
+
+Everything else in probability theory follows logically from these three rules.
+
+## Set Operations on Events
+
+Think of each event as a set of outcomes in the sample space $\Omega$.
+
+| Operation | Symbol | Meaning | Example |
+|--------------------|-----------------|-----------------|-----------------|
+| **Union** | $A \cup B$ | *A* or *B* (or both) occur | Rolling a 1 *or* a 2 on a die |
+| **Intersection** | $A \cap B$ | *A* and *B* both occur | Card is red *and* a face card |
+| **Complement** | $A^c$ | *A* does not occur | Not rolling a 6 |
+
+### General Addition Rule
+
+When events are *not* mutually exclusive you must subtract the overlap:
+
+$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$
+
+------------------------------------------------------------------------
+
+# Conditional Probability
+
+## Definition
+
+**Conditional probability** answers: *"Given that B has already happened, how likely is A?"*
+
+$$P(A \mid B) = \frac{P(A \cap B)}{P(B)}, \quad P(B) > 0$$
+
+Conditioning *narrows the sample space* down to the outcomes where B is true, then re-evaluates the proportion where A is also true.
+
+> **Intuition:** Imagine 100 students. 60 passed the exam, and 40 passed *and* studied. Given a student passed, the probability they studied is $40/60 \approx 0.67$.
+
+## Law of Total Probability
+
+If events $B_1, B_2, \ldots, B_k$ partition the sample space (mutually exclusive, exhaustive), then:
+
+$$P(A) = \sum_{i=1}^{k} P(A \mid B_i)\, P(B_i)$$
+
+**Plain English:** Break a complex event into simpler paths, compute the probability along each path, then add them up.
+
+**Example:** A student can pass an exam by passing Theory *or* Practical:
+
+$$P(\text{Pass}) = P(\text{Pass} \mid \text{Theory})\,P(\text{Theory}) + P(\text{Pass} \mid \text{Practical})\,P(\text{Practical})$$
+
+------------------------------------------------------------------------
+
+# Bayes' Theorem
+
+**Bayes' theorem** lets you *update* a prior belief about an event when new evidence arrives.
+
+$$P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)}$$
+
+| Term          | Name           | Meaning                                      |
+|---------------------|---------------------|------------------------------|
+| $P(A)$        | **Prior**      | Belief about A *before* seeing B             |
+| $P(B \mid A)$ | **Likelihood** | How probable is the evidence B if A is true? |
+| $P(B)$        | **Marginal**   | Overall probability of observing B           |
+| $P(A \mid B)$ | **Posterior**  | Updated belief about A *after* seeing B      |
+
+## Bayesian Updating Logic
+
+The posterior from one analysis becomes the prior for the next, allowing beliefs to be **refined iteratively** as more data arrives:
+
+$$\underbrace{P(A \mid B_1, B_2)}_{\text{updated posterior}} \propto P(B_2 \mid A)\;\underbrace{P(A \mid B_1)}_{\text{previous posterior becomes new prior}}$$
+
+## Interpretation of Posterior Probabilities
+
+The posterior $P(A \mid B)$ is not fixed — it depends on:
+
+-   **How strong the prior is** (how confident you were before).
+-   **How informative the new data is** (the likelihood ratio $P(B|A) / P(B|\neg A)$).
+
+> **Example:** A medical test for a rare disease has 99% sensitivity. Even so, if the disease affects only 1 in 10,000 people, a positive test still has a low posterior probability of *actually* having the disease — because the base rate (prior) is so low. This is the **base-rate fallacy**, and Bayes' theorem is the antidote.
+
+------------------------------------------------------------------------
+
+# R-Based Simulation
+
+## Monte Carlo Probability Experiments
+
+**Monte Carlo simulation** estimates probabilities by repeating a random experiment thousands of times and counting outcomes — a direct application of the *frequentist* interpretation of probability.
+
+```{r}
+set.seed(42)
+n <- 100000   # more simulations → more accurate estimate
+
+# Simulate random integers 1–100
+sim_data <- sample(1:100, size = n, replace = TRUE)
+
+# Estimate P(X > 50)
+prob_gt50 <- mean(sim_data > 50)
+cat("Estimated P(X > 50):", prob_gt50, "\n")
+cat("Theoretical value  : 0.50\n")
+```
+
+As $n \to \infty$, the estimate converges to the true probability. This is the **Law of Large Numbers** in action.
+
+```{r}
+# Visualise convergence: running estimate vs trial number
+set.seed(42)
+trials   <- sample(1:100, size = 5000, replace = TRUE)
+running  <- cumsum(trials > 50) / seq_along(trials)
+
+plot(running,
+     type = "l", col = "steelblue", lwd = 1.5,
+     ylim = c(0.3, 0.7),
+     main = "Monte Carlo Convergence: P(X > 50)",
+     xlab = "Number of Trials",
+     ylab = "Running Probability Estimate")
+abline(h = 0.5, col = "darkred", lwd = 2, lty = 2)
+legend("topright",
+       legend = c("Running Estimate", "True Value (0.5)"),
+       col    = c("steelblue", "darkred"),
+       lty    = c(1, 2), lwd = 2, bty = "n")
+```
+
+## Empirical Validation of Bayes' Theorem
+
+We validate the conditional probability definition $P(A \mid B) = P(A \cap B) / P(B)$ using simulation, without invoking any formula directly.
+
+```{r}
+set.seed(123)
+N <- 100000   # large sample for accurate estimation
+
+# Generate 100,000 random integers 1–100
+data <- sample(1:100, size = N, replace = TRUE)
+
+# Define two events
+A <- data > 50      # Event A: number > 50
+B <- data %% 2 == 0 # Event B: number is even
+
+# --- Step 1: Basic probabilities ---
+P_A       <- mean(A)       # P(A)  ≈ 0.50
+P_B       <- mean(B)       # P(B)  ≈ 0.50
+P_A_and_B <- mean(A & B)   # P(A ∩ B)
+
+# --- Step 2: Empirical conditional probability ---
+P_A_given_B_empirical   <- P_A_and_B / P_B
+
+# --- Step 3: Theoretical value ---
+# Numbers 51–100 that are even: 25 values out of 50 even numbers → 0.5
+P_A_given_B_theoretical <- 0.5
+
+cat("P(A)              :", round(P_A, 4), "\n")
+cat("P(B)              :", round(P_B, 4), "\n")
+cat("P(A ∩ B)          :", round(P_A_and_B, 4), "\n")
+cat("P(A|B) empirical  :", round(P_A_given_B_empirical, 4), "\n")
+cat("P(A|B) theoretical:", P_A_given_B_theoretical, "\n")
+```
+
+> **What this shows:** The empirically computed $P(A \mid B)$ closely matches the theoretical value, confirming that the definition of conditional probability works exactly as expected. The small difference is due to random sampling variation.
+
+### Visualising the Joint Event Space
+
+```{r}
+# Proportion of outcomes in each region
+region <- ifelse(A & B,  "A ∩ B",
+          ifelse(A & !B, "A only",
+          ifelse(!A & B, "B only", "Neither")))
+
+counts <- table(region) / N
+
+barplot(counts,
+        col    = c("steelblue", "lightcoral", "seagreen", "grey80"),
+        border = "white",
+        main   = "Proportion of Outcomes by Event Region",
+        ylab   = "Proportion",
+        ylim   = c(0, 0.35))
+```
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|------------------------------|------------------------------------------|
+| Probability Axioms | Non-negativity, Normalisation, Additivity — the three foundations |
+| Union $A \cup B$ | At least one event occurs; subtract overlap if not mutually exclusive |
+| Intersection $A \cap B$ | Both events occur simultaneously |
+| Complement $A^c$ | The event does *not* occur; $P(A^c) = 1 - P(A)$ |
+| Conditional Probability | $P(A \mid B) = P(A \cap B)/P(B)$; narrows sample space to B |
+| Law of Total Probability | Decompose complex event through an exhaustive partition |
+| Bayes' Theorem | Posterior $\propto$ Likelihood $\times$ Prior; update beliefs with evidence |
+| Monte Carlo | Estimate probability by counting successes over many simulations |
+| Law of Large Numbers | Simulated frequency → true probability as $n \to \infty$ |

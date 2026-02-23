@@ -1,0 +1,309 @@
+---
+title: "Chapter 4: Random Variables and Probability Distributions"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Random Variables
+
+A **random variable** is a function that maps each outcome of a random experiment to a numerical value.
+
+> **Example:** Roll a die. The number that lands face-up is a random variable — it takes values 1–6, each with probability 1/6.
+
+## Discrete vs Continuous Random Variables
+
+| Type | Values | Examples |
+|------|--------|---------|
+| **Discrete** | Countable (0, 1, 2, …) | Number of heads in 10 coin flips; number of calls per hour |
+| **Continuous** | Any value in an interval | Height, weight, reaction time, temperature |
+
+The distinction matters because it determines which mathematical tool — PMF or PDF — describes the distribution.
+
+## Probability Mass and Density Functions
+
+### PMF — for Discrete Variables
+
+The **Probability Mass Function** $p(x)$ gives the *exact* probability of each possible value:
+
+$$p(x) = P(X = x), \quad \sum_{\text{all } x} p(x) = 1$$
+
+```{r pmf-plot, fig.align='center', fig.width=7, fig.height=4}
+# PMF of a fair die
+x   <- 1:6
+pmf <- rep(1/6, 6)
+
+barplot(pmf,
+        names.arg = x,
+        col       = "steelblue",
+        border    = "white",
+        main      = "PMF: Fair Die",
+        xlab      = "Outcome",
+        ylab      = "P(X = x)",
+        ylim      = c(0, 0.25))
+abline(h = 1/6, col = "darkred", lty = 2, lwd = 1.5)
+```
+
+### PDF — for Continuous Variables
+
+The **Probability Density Function** $f(x)$ does **not** give point probabilities (those are always 0 for continuous variables). Instead, probability is the **area under the curve**:
+
+$$P(a \leq X \leq b) = \int_a^b f(x)\, dx, \quad \int_{-\infty}^{\infty} f(x)\, dx = 1$$
+
+```{r pdf-plot, fig.align='center', fig.width=7, fig.height=4}
+# PDF of a Standard Normal distribution
+x_vals <- seq(-4, 4, length.out = 300)
+y_vals <- dnorm(x_vals)
+
+plot(x_vals, y_vals,
+     type = "l", lwd = 2, col = "steelblue",
+     main = "PDF: Standard Normal Distribution",
+     xlab = "x", ylab = "f(x)")
+
+# Shade area between -1 and 1
+x_shade <- seq(-1, 1, length.out = 200)
+polygon(c(-1, x_shade, 1), c(0, dnorm(x_shade), 0),
+        col = rgb(0.27, 0.51, 0.71, 0.3), border = NA)
+text(0, 0.15, "P(-1 ≤ X ≤ 1) ≈ 68%", cex = 0.9, col = "navy")
+```
+
+------------------------------------------------------------------------
+
+# Discrete Distributions
+
+## Binomial Distribution
+
+Models the number of **successes** in $n$ independent yes/no trials, each with success probability $p$.
+
+$$X \sim \text{Bin}(n, p), \quad P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}$$
+
+- **Mean:** $\mu = np$
+- **Variance:** $\sigma^2 = np(1-p)$
+
+**When to use:** Fixed number of trials, each independent, same $p$ each time.  
+**Example:** Number of students who pass out of 30, assuming each has a 70% pass rate.
+
+## Poisson Distribution
+
+Models the number of **rare events** occurring in a fixed interval of time or space.
+
+$$X \sim \text{Poisson}(\lambda), \quad P(X = k) = \frac{e^{-\lambda} \lambda^k}{k!}$$
+
+- **Mean:** $\mu = \lambda$
+- **Variance:** $\sigma^2 = \lambda$  ← mean equals variance (a unique property)
+
+**When to use:** Events happen at a constant average rate; occurrences are independent.  
+**Example:** Number of customer calls received per hour; number of typos per page.
+
+## Poisson Approximation to Binomial
+
+When $n$ is **large** and $p$ is **small** (rare events), $\text{Bin}(n, p) \approx \text{Poisson}(\lambda = np)$.
+
+| Condition | Rule of thumb |
+|-----------|--------------|
+| Large $n$ | $n \geq 20$ |
+| Small $p$ | $p \leq 0.05$ |
+
+**Example:** Defective items in mass production — 10,000 items with a 0.1% defect rate.
+
+------------------------------------------------------------------------
+
+# Continuous Distributions
+
+## Uniform Distribution
+
+All values in the interval $[a, b]$ are **equally likely**.
+
+$$X \sim \text{Uniform}(a, b), \quad f(x) = \frac{1}{b - a}, \quad a \leq x \leq b$$
+
+- **Mean:** $\mu = \frac{a + b}{2}$
+- **Variance:** $\sigma^2 = \frac{(b-a)^2}{12}$
+
+**Example:** Random arrival time within a 60-minute window; random number generation.
+
+## Normal Distribution
+
+The **bell-shaped** distribution, symmetric around the mean — arguably the most important distribution in statistics.
+
+$$X \sim \mathcal{N}(\mu, \sigma^2), \quad f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\!\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)$$
+
+Key properties:
+
+| Region | Probability |
+|--------|------------|
+| $\mu \pm 1\sigma$ | ≈ 68% |
+| $\mu \pm 2\sigma$ | ≈ 95% |
+| $\mu \pm 3\sigma$ | ≈ 99.7% |
+
+**Example:** Exam scores, IQ scores, measurement errors, biological measurements.
+
+------------------------------------------------------------------------
+
+# Limit Theorems
+
+## Central Limit Theorem (CLT)
+
+> **Regardless of the population's shape**, the distribution of the **sample mean** $\bar{X}$ approaches a Normal distribution as sample size $n$ increases.
+
+$$\bar{X} \xrightarrow{d} \mathcal{N}\!\left(\mu,\, \frac{\sigma^2}{n}\right) \quad \text{as } n \to \infty$$
+
+This is why the Normal distribution appears so often in practice — it emerges naturally from averages, even when individual data points are not Normal.
+
+## Implications for Inference
+
+The CLT is the engine behind most classical statistical methods:
+
+- **Confidence intervals** are built using the Normal approximation to $\bar{X}$.
+- **Hypothesis tests** (z-tests, t-tests) rely on the sampling distribution of $\bar{X}$ being approximately Normal.
+- It justifies using Normal-based methods even with non-Normal raw data, provided $n$ is large enough (rule of thumb: $n \geq 30$).
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## `dbinom()` and `rbinom()`
+
+```{r binomial}
+# --- dbinom(): theoretical probability ---
+# P(X = 3) where X ~ Bin(10, 0.5)
+dbinom(3, size = 10, prob = 0.5)
+
+# P(X <= 3): cumulative probability
+pbinom(3, size = 10, prob = 0.5)
+
+# --- rbinom(): simulate binomial data ---
+set.seed(42)
+sim_binom <- rbinom(1000, size = 10, prob = 0.5)
+
+hist(sim_binom,
+     breaks = 0:11 - 0.5,
+     col    = "steelblue",
+     border = "white",
+     main   = "Simulated Bin(10, 0.5) — 1000 trials",
+     xlab   = "Number of Successes",
+     ylab   = "Frequency")
+```
+
+## `dpois()` and `rpois()`
+
+```{r poisson}
+# --- dpois(): P(X = k) where X ~ Poisson(lambda = 3) ---
+dpois(2, lambda = 3)   # P(X = 2)
+dpois(3, lambda = 3)   # P(X = 3) — at the mean, highest probability
+
+# --- rpois(): simulate Poisson data ---
+set.seed(42)
+sim_pois <- rpois(1000, lambda = 3)
+
+hist(sim_pois,
+     breaks = -0.5:(max(sim_pois) + 0.5),
+     col    = "seagreen",
+     border = "white",
+     main   = "Simulated Poisson(λ = 3) — 1000 observations",
+     xlab   = "Count",
+     ylab   = "Frequency")
+```
+
+## `dnorm()`, `pnorm()`, `rnorm()`
+
+```{r normal}
+# --- dnorm(): height of the Normal PDF at a point ---
+# This is NOT a probability — it's a density value
+dnorm(0, mean = 0, sd = 1)   # peak of the standard normal
+
+# --- pnorm(): cumulative probability P(X <= x) ---
+pnorm(1.96, mean = 0, sd = 1)   # ≈ 0.975 → 97.5% of data below 1.96
+
+# Verify the 95% rule: P(-1.96 <= X <= 1.96)
+pnorm(1.96) - pnorm(-1.96)
+
+# --- rnorm(): random samples from a Normal distribution ---
+set.seed(42)
+sim_norm <- rnorm(1000, mean = 0, sd = 1)
+
+hist(sim_norm,
+     breaks = 30,
+     col    = "mediumpurple",
+     border = "white",
+     main   = "Simulated N(0,1) — 1000 observations",
+     xlab   = "Value",
+     ylab   = "Frequency",
+     freq   = FALSE)
+curve(dnorm(x), add = TRUE, col = "darkred", lwd = 2)
+legend("topright", legend = "Theoretical PDF",
+       col = "darkred", lwd = 2, bty = "n")
+```
+
+## CLT Simulation
+
+```{r clt-simulation, fig.align='center', fig.width=9, fig.height=4}
+set.seed(123)
+
+# Skewed population: exponential distribution
+population   <- rexp(100000, rate = 0.1)
+
+num_samples  <- 2000
+sample_sizes <- c(5, 30)     # compare small vs large n
+
+par(mfrow = c(1, 2))
+
+for (n in sample_sizes) {
+  sample_means <- replicate(num_samples, mean(sample(population, n, replace = TRUE)))
+
+  hist(sample_means,
+       breaks = 40,
+       col    = "steelblue",
+       border = "white",
+       main   = paste0("Sample Means (n = ", n, ")"),
+       xlab   = "Sample Mean",
+       ylab   = "Frequency",
+       freq   = FALSE)
+
+  # Overlay theoretical Normal curve
+  curve(dnorm(x,
+              mean = mean(population),
+              sd   = sd(population) / sqrt(n)),
+        add = TRUE, col = "darkred", lwd = 2)
+}
+
+par(mfrow = c(1, 1))
+```
+
+> **Observe:** With $n = 5$, the distribution of sample means is still visibly skewed. By $n = 30$, it closely follows the red Normal curve — the CLT at work.
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Random Variable | Maps random outcomes to numbers; described by PMF (discrete) or PDF (continuous) |
+| PMF | Exact probability at each value; all probabilities sum to 1 |
+| PDF | Probability = area under the curve; point probability = 0 |
+| Binomial $\text{Bin}(n,p)$ | Count of successes in $n$ independent trials |
+| Poisson $\text{Poisson}(\lambda)$ | Count of rare events; mean = variance = $\lambda$ |
+| Poisson ≈ Binomial | Valid when $n$ large, $p$ small, $\lambda = np$ |
+| Uniform | Equal probability across $[a, b]$ |
+| Normal $\mathcal{N}(\mu, \sigma^2)$ | Bell curve; 68–95–99.7 rule |
+| CLT | Sample mean $\to$ Normal as $n \to \infty$, regardless of population shape |
+| R: `d*()` | Density/mass at a point |
+| R: `p*()` | Cumulative probability $P(X \leq x)$ |
+| R: `r*()` | Random samples from the distribution |

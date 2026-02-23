@@ -1,0 +1,267 @@
+---
+title: "Chapter 6: Classical Parametric Tests"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+
+# Shared sample data used across several sections
+bp_sample <- c(5, 7, 4, 6, 5, 8, 7, 6, 5, 4)
+group1    <- c(20, 22, 21, 23, 24)
+group2    <- c(14, 18, 15, 17, 16)
+before    <- c(130, 142, 138, 125, 136)
+after     <- c(120, 130, 128, 118, 125)
+```
+
+------------------------------------------------------------------------
+
+# Tests for Means
+
+Parametric tests for means assume that data come from a **Normal** (or approximately Normal) distribution. The choice of test depends on how many groups you have and whether the population variance is known.
+
+## Choosing the Right Test
+
+| Situation | Test | Key condition |
+|-----------|------|--------------|
+| 1 sample, σ² known, large $n$ | **z-test** | Population SD is known |
+| 1 sample, σ² unknown | **One-sample t-test** | Estimate SD from sample |
+| 2 independent samples | **Two-sample t-test** | Groups are unrelated |
+| Same subjects measured twice | **Paired t-test** | Observations come in pairs |
+
+## z-test
+
+Use the **z-test** when the population standard deviation $\sigma$ is *known* and the sample size is large.
+
+$$z = \frac{\bar{x} - \mu_0}{\sigma / \sqrt{n}} \sim \mathcal{N}(0, 1) \text{ under } H_0$$
+
+In practice, $\sigma$ is rarely known, so the t-test is used instead.
+
+## One-Sample t-test
+
+Compares the sample mean $\bar{x}$ to a hypothesised population mean $\mu_0$ when $\sigma$ is *unknown*.
+
+$$t = \frac{\bar{x} - \mu_0}{s / \sqrt{n}} \sim t_{n-1} \text{ under } H_0$$
+
+The t-distribution has heavier tails than the Normal, accounting for the extra uncertainty from estimating $\sigma$ with $s$.
+
+## Independent Two-Sample t-test
+
+Tests whether two *unrelated* groups have the same population mean.
+
+$$t = \frac{\bar{x}_1 - \bar{x}_2}{\sqrt{\dfrac{s_1^2}{n_1} + \dfrac{s_2^2}{n_2}}}$$
+
+> **Welch's vs Student's:** By default, R uses **Welch's t-test** (`var.equal = FALSE`), which does *not* assume equal group variances. This is the safer default — it reduces to Student's t-test when variances are equal.
+
+## Paired t-test
+
+Used when the same subject is measured under two conditions (before/after, treatment/control). Differences $d_i = x_{1i} - x_{2i}$ are computed first, then a one-sample t-test is applied to those differences.
+
+$$t = \frac{\bar{d}}{s_d / \sqrt{n}} \sim t_{n-1} \text{ under } H_0: \mu_d = 0$$
+
+> **Why pairing helps:** By analysing differences, we remove between-subject variability, making the test more powerful than an independent t-test on the same data.
+
+------------------------------------------------------------------------
+
+# Tests for Proportions
+
+## One-Sample Proportion Test
+
+Tests whether an observed sample proportion $\hat{p}$ differs from a hypothesised population proportion $p_0$.
+
+$$z = \frac{\hat{p} - p_0}{\sqrt{p_0(1 - p_0)/n}}$$
+
+**Example:** Does the pass rate differ from 50%? If 45 out of 100 students pass: $\hat{p} = 0.45$, $p_0 = 0.50$.
+
+## Two-Sample Proportion Test
+
+Tests whether two independent sample proportions $\hat{p}_1$ and $\hat{p}_2$ are significantly different.
+
+$$z = \frac{\hat{p}_1 - \hat{p}_2}{\sqrt{\hat{p}(1-\hat{p})\left(\frac{1}{n_1} + \frac{1}{n_2}\right)}}$$
+
+where $\hat{p} = (x_1 + x_2)/(n_1 + n_2)$ is the **pooled proportion**.
+
+------------------------------------------------------------------------
+
+# Confidence Intervals
+
+## Construction and Interpretation
+
+A **confidence interval (CI)** gives a range of plausible values for the true population parameter, paired with a confidence level (typically 95%).
+
+$$\text{CI} = \bar{x} \;\pm\; t^*_{n-1} \cdot \frac{s}{\sqrt{n}}$$
+
+where $t^*_{n-1}$ is the critical value from the t-distribution for the chosen confidence level.
+
+> **Correct interpretation:** If we repeated this sampling process 100 times and built 100 CIs, approximately 95 of them would contain the true $\mu$. *The CI does not say "there is a 95% chance $\mu$ is in this interval"* — $\mu$ is fixed; the interval is random.
+
+## Coverage Probability
+
+**Coverage probability** is the long-run proportion of constructed CIs that contain the true parameter. For a correctly specified 95% CI, the coverage probability is exactly 95%.
+
+```{r coverage-simulation, fig.align='center', fig.width=9, fig.height=5}
+set.seed(42)
+
+true_mu   <- 50
+true_sd   <- 10
+n         <- 30
+n_reps    <- 50        # number of CIs to visualise
+level     <- 0.95
+captured  <- logical(n_reps)
+ci_low    <- numeric(n_reps)
+ci_high   <- numeric(n_reps)
+
+for (i in 1:n_reps) {
+  samp       <- rnorm(n, mean = true_mu, sd = true_sd)
+  ci         <- t.test(samp, conf.level = level)$conf.int
+  ci_low[i]  <- ci[1]
+  ci_high[i] <- ci[2]
+  captured[i] <- (ci[1] <= true_mu & true_mu <= ci[2])
+}
+
+# Plot CIs: green = captures true mean, red = misses
+colours <- ifelse(captured, "steelblue", "tomato")
+
+plot(NULL, xlim = c(35, 65), ylim = c(1, n_reps),
+     main = paste0("Coverage Simulation: ", sum(captured), "/", n_reps,
+                   " CIs capture μ = ", true_mu),
+     xlab = "Value", ylab = "Simulation Index")
+
+segments(ci_low, 1:n_reps, ci_high, 1:n_reps,
+         col = colours, lwd = 1.8)
+abline(v = true_mu, col = "black", lwd = 2, lty = 2)
+
+legend("topright",
+       legend = c("CI captures μ", "CI misses μ", "True μ"),
+       col    = c("steelblue", "tomato", "black"),
+       lty    = c(1, 1, 2), lwd = 2, bty = "n")
+```
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## `t.test()` Variants
+
+```{r t-test-onesample}
+# --- One-sample t-test ---
+# H0: μ = 5  (blood pressure reduction)
+t.test(bp_sample, mu = 5)
+```
+
+```{r t-test-twosample}
+# --- Independent two-sample t-test (Welch, default) ---
+# H0: μ1 = μ2
+t.test(group1, group2)
+
+# --- Force equal variances (Student's t-test) ---
+t.test(group1, group2, var.equal = TRUE)
+```
+
+```{r t-test-paired}
+# --- Paired t-test ---
+# H0: mean difference = 0 (before vs after treatment)
+t.test(before, after, paired = TRUE)
+```
+
+### Side-by-side comparison of all three
+
+```{r t-test-summary, fig.align='center', fig.width=10, fig.height=4}
+par(mfrow = c(1, 3))
+
+# One-sample
+boxplot(bp_sample,
+        main = "One-Sample\nbp_sample vs μ₀=5",
+        col  = "steelblue", border = "navy", ylab = "Value")
+abline(h = 5, col = "darkred", lwd = 2, lty = 2)
+
+# Two-sample
+boxplot(group1, group2,
+        names = c("Group 1", "Group 2"),
+        main  = "Two-Sample\nGroup 1 vs Group 2",
+        col   = c("steelblue", "lightcoral"),
+        border = c("navy", "darkred"))
+
+# Paired
+boxplot(before - after,
+        main = "Paired\nDifference (Before − After)",
+        col  = "mediumpurple", border = "purple4", ylab = "Difference")
+abline(h = 0, col = "darkred", lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+```
+
+## `prop.test()`
+
+```{r prop-test}
+# --- One-sample proportion test ---
+# H0: p = 0.5 (45 successes out of 100 trials)
+prop.test(x = 45, n = 100, p = 0.5)
+
+# --- Two-sample proportion test ---
+# H0: p1 = p2
+prop.test(x = c(45, 30), n = c(100, 80))
+```
+
+## Manual vs Automated Confidence Intervals
+
+```{r confidence-intervals}
+# --- Automated CI from t.test() ---
+auto_ci <- t.test(bp_sample)$conf.int
+cat("Automated 95% CI: [", round(auto_ci[1], 3), ",",
+                           round(auto_ci[2], 3), "]\n")
+
+# --- Manual CI from formula: x̄ ± t* × (s/√n) ---
+x_bar      <- mean(bp_sample)
+s          <- sd(bp_sample)
+n          <- length(bp_sample)
+t_critical <- qt(0.975, df = n - 1)    # two-tailed, df = n-1
+
+margin     <- t_critical * (s / sqrt(n))
+manual_ci  <- c(x_bar - margin, x_bar + margin)
+
+cat("Manual 95% CI   : [", round(manual_ci[1], 3), ",",
+                           round(manual_ci[2], 3), "]\n")
+
+# Verify they match
+all.equal(as.numeric(auto_ci), manual_ci)
+```
+
+> **What changes the width of a CI?**
+>
+> | Factor | Effect on CI width |
+> |--------|--------------------|
+> | Larger $n$ | Narrower (more precise) |
+> | Larger $s$ | Wider (more variable data) |
+> | Higher confidence level (e.g., 99%) | Wider (more conservative) |
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Test | Use case | Key formula |
+|------|---------|------------|
+| z-test | 1 sample, $\sigma$ known | $z = (\bar{x} - \mu_0)/(\sigma/\sqrt{n})$ |
+| One-sample t-test | 1 sample, $\sigma$ unknown | $t = (\bar{x} - \mu_0)/(s/\sqrt{n})$, df $= n-1$ |
+| Two-sample t-test | 2 independent groups | $t = (\bar{x}_1 - \bar{x}_2)/\text{SE}$, Welch by default |
+| Paired t-test | Same subjects, 2 conditions | $t = \bar{d}/(s_d/\sqrt{n})$, df $= n-1$ |
+| One-sample prop. test | 1 proportion vs $p_0$ | `prop.test(x, n, p)` |
+| Two-sample prop. test | 2 proportions | `prop.test(c(x1,x2), c(n1,n2))` |
+| Confidence Interval | Range for true parameter | $\bar{x} \pm t^* \cdot s/\sqrt{n}$ |
+| Coverage probability | Long-run CI accuracy | ~95% of 95% CIs contain true $\mu$ |
+| R: `t.test()` | All t-test variants | `paired=TRUE`, `var.equal=TRUE/FALSE` |
+| R: `prop.test()` | Proportion tests | `x`, `n`, optional `p` |

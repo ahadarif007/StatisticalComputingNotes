@@ -1,0 +1,282 @@
+---
+title: "Chapter 8: Effect Sizes and Practical Interpretation"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Beyond p-values
+
+A statistically significant result ($p < 0.05$) answers one narrow question: *"Is it unlikely that this result occurred by chance?"* It says nothing about whether the result is **meaningful** or **useful** in the real world.
+
+> **The problem with p-values alone:** With a large enough sample, even a trivially small difference will produce $p < 0.05$. A drug that lowers blood pressure by 0.1 mmHg might be "statistically significant" in a trial of 100,000 patients — yet clinically irrelevant.
+
+## Statistical vs Practical Significance
+
+| Term | Question it answers | Depends on |
+|------|-------------------|-----------|
+| **Statistical significance** | Is the effect real (not due to chance)? | Sample size $n$ and the effect |
+| **Practical significance** | Is the effect large enough to matter? | The magnitude of the effect only |
+
+The two can diverge dramatically:
+
+- **Large $n$, tiny effect:** Statistically significant, practically irrelevant.
+- **Small $n$, large effect:** Not statistically significant, yet potentially important.
+
+**Effect size** bridges this gap — it quantifies *how big* an effect is, independent of sample size.
+
+------------------------------------------------------------------------
+
+# Effect Size Measures
+
+## Cohen's *d* — for Comparing Two Means
+
+**Cohen's *d*** measures the standardised difference between two group means: how many standard deviations apart are the groups?
+
+$$d = \frac{\bar{x}_1 - \bar{x}_2}{s_{\text{pooled}}}, \quad s_{\text{pooled}} = \sqrt{\frac{s_1^2 + s_2^2}{2}}$$
+
+### Interpretation benchmarks (Cohen, 1988)
+
+| $|d|$ | Effect size | Real-world analogy |
+|-------|------------|-------------------|
+| $\approx 0.2$ | Small | Difference between heights of 15- and 16-year-old girls |
+| $\approx 0.5$ | Medium | Difference in IQ between clerical and semi-skilled workers |
+| $\approx 0.8$ | Large | Difference in IQ between PhD holders and typical college freshmen |
+
+> **Rule of thumb:** Report the effect size alongside every p-value. A result can be statistically significant and practically small ($d = 0.1$), or statistically non-significant and practically large ($d = 0.9$ with $n = 5$).
+
+## Phi Coefficient ($\phi$) — for Categorical Data
+
+The **phi coefficient** measures the strength of association between two **binary categorical variables** in a 2×2 contingency table.
+
+$$\phi = \sqrt{\frac{\chi^2}{n}}$$
+
+where $\chi^2$ is the chi-squared test statistic and $n$ is the total sample size.
+
+| $|\phi|$ | Association strength |
+|----------|---------------------|
+| $0.1$ | Weak |
+| $0.3$ | Moderate |
+| $0.5$ | Strong |
+
+For larger contingency tables ($r \times c$), use **Cramér's V**:
+
+$$V = \sqrt{\frac{\chi^2}{n \cdot \min(r-1,\; c-1)}}$$
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## Manual Computation of Cohen's *d*
+
+```{r cohens-d}
+group1 <- c(20, 22, 21, 23, 24)
+group2 <- c(10, 11, 12, 13, 14)
+
+# Means
+mean1 <- mean(group1)
+mean2 <- mean(group2)
+
+# Pooled standard deviation
+pooled_sd <- sqrt((var(group1) + var(group2)) / 2)
+
+# Cohen's d
+cohen_d <- (mean1 - mean2) / pooled_sd
+
+cat("Mean Group 1       :", mean1, "\n")
+cat("Mean Group 2       :", mean2, "\n")
+cat("Pooled SD          :", round(pooled_sd, 4), "\n")
+cat("Cohen's d          :", round(cohen_d, 4), "\n")
+cat("Interpretation     :", 
+    ifelse(abs(cohen_d) >= 0.8, "Large",
+    ifelse(abs(cohen_d) >= 0.5, "Medium", "Small")), "effect\n")
+```
+
+## Computing Phi and Cramér's V
+
+```{r phi-cramerv}
+# 2×2 contingency table
+data_table <- matrix(c(30, 20, 25, 25),
+                     nrow = 2, byrow = TRUE,
+                     dimnames = list(Group     = c("A", "B"),
+                                     Outcome   = c("Yes", "No")))
+
+chi_result <- chisq.test(data_table)
+n_total    <- sum(data_table)
+
+# Phi coefficient (2×2 tables only)
+phi <- sqrt(chi_result$statistic / n_total)
+
+# Cramér's V (generalises to any r×c table)
+k       <- min(nrow(data_table) - 1, ncol(data_table) - 1)
+cramer_v <- sqrt(chi_result$statistic / (n_total * k))
+
+cat("χ² statistic  :", round(chi_result$statistic, 4), "\n")
+cat("p-value       :", round(chi_result$p.value, 4), "\n")
+cat("Phi (φ)       :", round(phi, 4), "\n")
+cat("Cramér's V    :", round(cramer_v, 4), "\n")
+```
+
+## Validation via Bootstrap Simulation
+
+Bootstrap simulation estimates the **sampling distribution of Cohen's *d***, giving us a confidence interval around the point estimate.
+
+```{r bootstrap-d, fig.align='center', fig.width=8, fig.height=4}
+set.seed(123)
+
+n_sims           <- 10000
+simulated_d      <- numeric(n_sims)
+
+for (i in 1:n_sims) {
+  s1 <- sample(group1, length(group1), replace = TRUE)
+  s2 <- sample(group2, length(group2), replace = TRUE)
+  simulated_d[i] <- (mean(s1) - mean(s2)) /
+                     sqrt((var(s1) + var(s2)) / 2)
+}
+
+# Bootstrap 95% CI for Cohen's d
+boot_ci <- quantile(simulated_d, probs = c(0.025, 0.975))
+
+hist(simulated_d,
+     breaks = 50,
+     col    = "steelblue",
+     border = "white",
+     main   = "Bootstrap Distribution of Cohen's d",
+     xlab   = "Cohen's d",
+     ylab   = "Frequency",
+     freq   = FALSE)
+
+abline(v = cohen_d,      col = "seagreen", lwd = 2)
+abline(v = boot_ci,      col = "darkred",  lwd = 2, lty = 2)
+
+legend("topleft",
+       legend = c(paste0("Observed d = ", round(cohen_d, 2)),
+                  paste0("95% CI: [", round(boot_ci[1], 2),
+                         ", ", round(boot_ci[2], 2), "]")),
+       col    = c("seagreen", "darkred"),
+       lwd    = 2, lty = c(1, 2), bty = "n")
+
+cat("Bootstrap 95% CI for Cohen's d: [",
+    round(boot_ci[1], 3), ",", round(boot_ci[2], 3), "]\n")
+```
+
+## The Effect of Sample Size on p-values vs Effect Size
+
+This simulation directly demonstrates why reporting effect size alongside p-values matters.
+
+```{r sample-size-demo, fig.align='center', fig.width=9, fig.height=4}
+set.seed(42)
+
+# True population difference is small but fixed
+true_d  <- 0.2          # small effect
+ns      <- c(10, 50, 200, 1000)
+results <- data.frame(n = ns, p_value = NA, cohens_d = NA)
+
+for (i in seq_along(ns)) {
+  n  <- ns[i]
+  g1 <- rnorm(n, mean = 0.2, sd = 1)
+  g2 <- rnorm(n, mean = 0.0, sd = 1)
+  tt <- t.test(g1, g2)
+  ps <- sqrt((var(g1) + var(g2)) / 2)
+
+  results$p_value[i]  <- tt$p.value
+  results$cohens_d[i] <- (mean(g1) - mean(g2)) / ps
+}
+
+par(mfrow = c(1, 2))
+
+# p-value shrinks with n even though effect is constant
+barplot(results$p_value,
+        names.arg = paste0("n=", ns),
+        col       = ifelse(results$p_value < 0.05, "tomato", "steelblue"),
+        border    = "white",
+        main      = "p-value by Sample Size\n(true d = 0.2)",
+        ylab      = "p-value",
+        ylim      = c(0, 1))
+abline(h = 0.05, col = "darkred", lwd = 2, lty = 2)
+legend("topright", legend = "α = 0.05",
+       col = "darkred", lty = 2, lwd = 2, bty = "n")
+
+# Cohen's d stays stable regardless of n
+barplot(results$cohens_d,
+        names.arg = paste0("n=", ns),
+        col       = "steelblue",
+        border    = "white",
+        main      = "Cohen's d by Sample Size\n(should stay ~0.2)",
+        ylab      = "Cohen's d",
+        ylim      = c(0, 0.5))
+abline(h = 0.2, col = "darkred", lwd = 2, lty = 2)
+legend("topright", legend = "True d = 0.2",
+       col = "darkred", lty = 2, lwd = 2, bty = "n")
+
+par(mfrow = c(1, 1))
+```
+
+> **Key insight:** The left panel shows p-values becoming significant as $n$ grows — purely because of sample size, not because the effect got larger. The right panel shows Cohen's *d* remaining stable around 0.2 throughout. **Effect size is sample-size-independent; p-values are not.**
+
+## Reporting Standards
+
+A complete, transparent statistical report should include:
+
+```{r reporting-example}
+# Full reporting template
+cat("=== Statistical Report ===\n\n")
+cat("Test           : Independent two-sample t-test\n")
+cat("Groups         : Group 1 (n =", length(group1),
+    ") vs Group 2 (n =", length(group2), ")\n")
+cat("Means          :", mean1, "vs", mean2, "\n")
+cat("t-statistic    :", round(t.test(group1, group2)$statistic, 3), "\n")
+cat("p-value        :", round(t.test(group1, group2)$p.value, 4), "\n")
+cat("95% CI for diff:",
+    round(t.test(group1, group2)$conf.int[1], 3), "to",
+    round(t.test(group1, group2)$conf.int[2], 3), "\n")
+cat("Cohen's d      :", round(cohen_d, 3), "(Large effect)\n")
+cat("Bootstrap 95% CI for d: [",
+    round(boot_ci[1], 3), ",", round(boot_ci[2], 3), "]\n")
+```
+
+### Reporting checklist
+
+| Item | Why it matters |
+|------|---------------|
+| Test name and type | Reproducibility; reader can verify |
+| Sample sizes ($n_1$, $n_2$) | Assesses statistical power |
+| Test statistic ($t$, $\chi^2$, $z$) | Shows the raw evidence |
+| p-value | Probability of result under $H_0$ |
+| Confidence interval | Range of plausible true values |
+| Effect size ($d$, $\phi$, $V$) | Practical magnitude, independent of $n$ |
+| Effect size CI (if possible) | Uncertainty around the effect estimate |
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Statistical significance | Depends heavily on $n$; does not indicate importance |
+| Practical significance | Requires effect size; independent of $n$ |
+| Cohen's *d* | Standardised mean difference; small=0.2, medium=0.5, large=0.8 |
+| Phi ($\phi$) | Effect size for 2×2 categorical tables; $= \sqrt{\chi^2/n}$ |
+| Cramér's V | Generalised phi for larger tables |
+| Pooled SD | $\sqrt{(s_1^2 + s_2^2)/2}$ — normalises the mean difference |
+| Bootstrap CI for *d* | Quantifies uncertainty around the effect size estimate |
+| p-value vs *d* demo | p → 0 as $n$ increases even for tiny true effects; *d* stays stable |
+| Reporting standard | Always include: $n$, test statistic, p-value, CI, effect size |

@@ -1,0 +1,254 @@
+---
+title: "Chapter 5: Statistical Inference — Estimation and Testing"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Principles of Inference
+
+**Statistical inference** is the process of drawing conclusions about a *population* using data from a *sample*. Because we never observe the full population, all inferences carry uncertainty — and quantifying that uncertainty is the core goal.
+
+## Sampling Distributions
+
+A **sampling distribution** is the probability distribution of a statistic (e.g., $\bar{X}$) computed from all possible samples of the same size $n$ drawn from a population.
+
+$$\bar{X} \sim \mathcal{N}\!\left(\mu,\; \frac{\sigma^2}{n}\right) \quad \text{(by the CLT, for large } n\text{)}$$
+
+Key properties of the sampling distribution of $\bar{X}$:
+
+| Property | Value |
+|----------|-------|
+| Mean (centre) | $\mu$ — same as the population mean |
+| Standard deviation | $\sigma / \sqrt{n}$ — called the **standard error (SE)** |
+| Shape | Approximately Normal for $n \geq 30$ (CLT) |
+
+> **Standard error ≠ standard deviation.** SD measures variability in the *data*; SE measures variability in the *statistic* across repeated samples. Larger $n$ → smaller SE → more precise estimate.
+
+## Point vs Interval Estimation
+
+| Method | What it gives | Example |
+|--------|--------------|---------|
+| **Point estimate** | A single best-guess value | $\bar{x} = 75$ (average exam score) |
+| **Interval estimate** | A range likely to contain the true parameter | $(70,\; 80)$ with 95% confidence |
+
+Point estimates are convenient but hide uncertainty. Interval estimates are more honest — they communicate both the estimate *and* how precise it is.
+
+------------------------------------------------------------------------
+
+# Hypothesis Testing Framework
+
+Hypothesis testing is a formal decision procedure: we start with a default assumption and ask whether the data provides enough evidence to reject it.
+
+## Null and Alternative Hypotheses
+
+| Hypothesis | Symbol | Meaning |
+|-----------|--------|---------|
+| **Null** | $H_0$ | Status quo; no effect, no difference — *"nothing interesting is happening"* |
+| **Alternative** | $H_1$ or $H_a$ | The claim we want to test — *"something is happening"* |
+
+> **Important:** We never "prove" $H_0$ or $H_1$. We only decide whether the data gives sufficient evidence *against* $H_0$.
+
+### Directionality of tests
+
+| Test type | $H_1$ | When to use |
+|-----------|--------|------------|
+| Two-tailed | $\mu \neq \mu_0$ | Direction of effect is unknown |
+| Left-tailed | $\mu < \mu_0$ | Expecting a decrease |
+| Right-tailed | $\mu > \mu_0$ | Expecting an increase |
+
+## The Six-Step Hypothesis Testing Procedure
+
+A structured approach prevents ad-hoc decisions and keeps the analysis reproducible.
+
+### Worked example: Does a new medicine lower blood pressure?
+
+**Step 1 — State hypotheses**
+
+$$H_0: \mu = 5 \quad \text{(medicine has no effect)}$$
+$$H_1: \mu \neq 5 \quad \text{(medicine does have an effect)}$$
+
+**Step 2 — Choose the test**  
+We have one sample, unknown population SD → use a **one-sample t-test**.
+
+**Step 3 — Set the significance level**  
+$$\alpha = 0.05 \quad \text{(5% risk of incorrectly rejecting } H_0\text{)}$$
+
+**Step 4 — Calculate the test statistic**
+
+$$t = \frac{\bar{x} - \mu_0}{s / \sqrt{n}}$$
+
+**Step 5 — Compare to the critical value / compute p-value**  
+If $p < \alpha$, the result is statistically significant.
+
+**Step 6 — Make a decision**  
+Reject $H_0$ if $p < \alpha$; otherwise, fail to reject $H_0$.
+
+------------------------------------------------------------------------
+
+# Errors and Significance
+
+## Type I and Type II Errors
+
+Every decision in hypothesis testing can be wrong in one of two ways:
+
+|  | $H_0$ is true | $H_0$ is false |
+|--|---------------|----------------|
+| **Reject $H_0$** | ❌ Type I error ($\alpha$) | ✅ Correct (Power) |
+| **Fail to reject $H_0$** | ✅ Correct | ❌ Type II error ($\beta$) |
+
+| Error | Also called | Consequence |
+|-------|------------|-------------|
+| **Type I** ($\alpha$) | False positive | Saying a medicine works when it doesn't |
+| **Type II** ($\beta$) | False negative | Missing a real effect of a medicine |
+
+> **Trade-off:** Reducing $\alpha$ (stricter evidence required) increases $\beta$ (more likely to miss real effects), and vice versa. The only way to reduce both simultaneously is to *increase sample size*.
+
+## p-values
+
+The **p-value** is the probability of observing a test statistic as extreme as (or more extreme than) the one computed, *assuming $H_0$ is true*.
+
+$$p\text{-value} = P(\text{data this extreme} \mid H_0 \text{ true})$$
+
+| p-value | Interpretation |
+|---------|---------------|
+| $p < 0.001$ | Very strong evidence against $H_0$ |
+| $0.001 \leq p < 0.01$ | Strong evidence |
+| $0.01 \leq p < 0.05$ | Moderate evidence |
+| $p \geq 0.05$ | Insufficient evidence to reject $H_0$ |
+
+> ⚠️ **Common misconception:** A p-value is *not* the probability that $H_0$ is true, and is *not* the probability of making an error. It is purely a measure of how surprising the observed data is under $H_0$.
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## Manual Test Statistic Computation
+
+Building the t-statistic by hand reinforces the formula and makes the mechanics transparent.
+
+```{r manual-t-test}
+# Blood pressure reduction measurements (sample data)
+bp_sample <- c(5, 7, 4, 6, 5, 8, 7, 6, 5, 4)
+
+# Hypothesised population mean under H0
+mu_0 <- 5
+
+# Sample statistics
+n           <- length(bp_sample)
+x_bar       <- mean(bp_sample)
+s           <- sd(bp_sample)
+df          <- n - 1        # degrees of freedom
+
+# t-statistic
+t_stat <- (x_bar - mu_0) / (s / sqrt(n))
+
+# Two-tailed p-value
+p_value <- 2 * pt(-abs(t_stat), df = df)
+
+cat("Sample mean   :", round(x_bar,  4), "\n")
+cat("Std deviation :", round(s,      4), "\n")
+cat("t-statistic   :", round(t_stat, 4), "\n")
+cat("Degrees of freedom:", df, "\n")
+cat("p-value       :", round(p_value, 4), "\n")
+cat("Decision      :", ifelse(p_value < 0.05,
+                              "Reject H0 (significant)",
+                              "Fail to reject H0"), "\n")
+```
+
+### Verify with `t.test()`
+
+```{r verify-t-test}
+t.test(bp_sample, mu = mu_0)
+```
+
+> The manual calculation and `t.test()` output should agree exactly — confirming the formula is correct.
+
+## Simulation-Based Inference (Bootstrap)
+
+When distributional assumptions are hard to justify, **simulation-based inference** (bootstrapping) provides an assumption-free alternative.
+
+The idea: repeatedly resample *with replacement* from your observed data and compute the statistic of interest each time. The distribution of these resampled statistics approximates the sampling distribution.
+
+```{r bootstrap, fig.align='center', fig.width=8, fig.height=4}
+set.seed(123)
+
+n                    <- length(bp_sample)
+num_simulations      <- 10000
+simulated_means      <- numeric(num_simulations)
+
+for (i in 1:num_simulations) {
+  boot_sample          <- sample(bp_sample, size = n, replace = TRUE)
+  simulated_means[i]   <- mean(boot_sample)
+}
+
+# Visualise the bootstrap sampling distribution
+hist(simulated_means,
+     breaks = 40,
+     col    = "steelblue",
+     border = "white",
+     main   = "Bootstrap Sampling Distribution of x̄",
+     xlab   = "Resampled Mean",
+     ylab   = "Frequency",
+     freq   = FALSE)
+
+# Mark the null hypothesis mean
+abline(v = mu_0,   col = "darkred",  lwd = 2, lty = 2)
+# Mark the observed sample mean
+abline(v = x_bar,  col = "seagreen", lwd = 2)
+
+legend("topright",
+       legend = c(paste0("Observed x̄ = ", round(x_bar, 2)),
+                  paste0("H₀: μ₀ = ", mu_0)),
+       col    = c("seagreen", "darkred"),
+       lwd    = 2, lty = c(1, 2), bty = "n")
+```
+
+```{r bootstrap-pvalue}
+# Bootstrap p-value: proportion of resampled means as extreme as x_bar
+# (two-tailed: shift distribution to be centred at mu_0)
+shifted_means <- simulated_means - mean(simulated_means) + mu_0
+boot_p_value  <- mean(abs(shifted_means - mu_0) >= abs(x_bar - mu_0))
+
+cat("Bootstrap p-value:", round(boot_p_value, 4), "\n")
+cat("Parametric p-value:", round(p_value, 4), "\n")
+```
+
+> Both p-values should be close, showing that parametric and simulation-based approaches agree when data is reasonably Normal.
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Sampling Distribution | Distribution of a statistic over all possible samples; SE = $\sigma/\sqrt{n}$ |
+| Standard Error | Measures precision of an estimate; decreases as $n$ increases |
+| Point Estimate | Single best guess (e.g., $\bar{x}$); convenient but hides uncertainty |
+| Interval Estimate | Range with stated confidence level; more informative |
+| $H_0$ vs $H_1$ | Null = no effect; Alternative = what we aim to detect |
+| Six-Step Procedure | State → Choose test → Set $\alpha$ → Compute statistic → Compare → Decide |
+| Type I error ($\alpha$) | Reject $H_0$ when it's true (false positive) |
+| Type II error ($\beta$) | Fail to reject $H_0$ when it's false (false negative) |
+| p-value | $P(\text{data this extreme} \mid H_0)$; smaller = stronger evidence against $H_0$ |
+| Bootstrap | Resample with replacement to approximate the sampling distribution without assumptions |
+| R: manual t | `(x_bar - mu_0) / (s / sqrt(n))` and `pt()` for the p-value |
+| R: `t.test()` | One-line verification of the manual calculation |

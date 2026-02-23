@@ -1,0 +1,318 @@
+---
+title: "Chapter 7: Model Assumptions and Categorical Inference"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Assumption Checking
+
+Parametric tests (t-tests, ANOVA, regression) rest on assumptions about the data. Violating them can produce misleading p-values and incorrect conclusions. Always check assumptions **before** running the test.
+
+## The Three Core Assumptions
+
+| Assumption | What it requires | What happens if violated |
+|-----------|-----------------|-------------------------|
+| **Normality** | Data (or residuals) follow a Normal distribution | t-tests lose accuracy; p-values become unreliable for small $n$ |
+| **Equal variances** | Group variances $\sigma_1^2 \approx \sigma_2^2$ in two-sample tests | Inflated Type I error with Student's t-test |
+| **Independence** | Observations do not influence each other | Standard errors are underestimated; spurious significance |
+
+## Normality
+
+Normality is most critical when $n$ is small. For large $n$, the **Central Limit Theorem** means the sampling distribution of $\bar{X}$ is approximately Normal even if the raw data is not.
+
+Ways to check normality:
+
+1. **Histogram** — does it look bell-shaped?
+2. **Q-Q plot** — points should fall along the diagonal reference line.
+3. **Shapiro-Wilk test** — formal test; $p > 0.05$ → no strong evidence against normality.
+
+## Equal Variances
+
+The assumption of **homoscedasticity** (equal variances) matters for two-sample t-tests and ANOVA.
+
+Ways to check:
+
+1. **Side-by-side boxplots** — boxes of similar height suggest similar spread.
+2. **Levene's test / `var.test()`** — formal test; $p > 0.05$ → variances are not significantly different.
+
+> **Practical note:** R's default `t.test()` uses **Welch's correction** (`var.equal = FALSE`), which is robust to unequal variances. Only switch to `var.equal = TRUE` after confirming equal variances.
+
+## Independence
+
+Independence is usually ensured by **study design**, not statistical testing:
+
+- Use **random sampling** or **random assignment**.
+- Avoid measuring the same subject multiple times without accounting for it (use paired tests or mixed models).
+- Be wary of **clustered data** (e.g., students within classrooms) where observations within a group are correlated.
+
+------------------------------------------------------------------------
+
+# Chi-Squared Methods
+
+When data is **categorical** (counts, frequencies, labels), we move away from means and into the world of the **chi-squared** ($\chi^2$) distribution.
+
+## Goodness-of-Fit Test
+
+Tests whether an observed frequency distribution matches a specified (theoretical) distribution.
+
+$$\chi^2 = \sum_{i=1}^{k} \frac{(O_i - E_i)^2}{E_i}$$
+
+where $O_i$ = observed count, $E_i$ = expected count in category $i$, and df $= k - 1$.
+
+**Decision rule:** Reject $H_0$ if $\chi^2_{\text{stat}} > \chi^2_{\text{critical}}$ (or if $p < \alpha$).
+
+**Example:** A die is rolled 60 times. We expect 10 of each face. Do the observed counts match?
+
+```{r goodness-of-fit, fig.align='center', fig.width=7, fig.height=4}
+set.seed(42)
+
+# Simulate 60 die rolls
+observed <- table(sample(1:6, size = 60, replace = TRUE))
+expected <- rep(10, 6)   # equal probability
+
+# Chi-squared goodness-of-fit test
+chi_gof <- chisq.test(observed, p = rep(1/6, 6))
+chi_gof
+
+# Visualise observed vs expected
+barplot(rbind(as.numeric(observed), expected),
+        beside   = TRUE,
+        names.arg = 1:6,
+        col      = c("steelblue", "lightcoral"),
+        border   = "white",
+        main     = "Goodness-of-Fit: Observed vs Expected Die Rolls",
+        xlab     = "Face",
+        ylab     = "Count",
+        legend.text = c("Observed", "Expected"),
+        args.legend = list(bty = "n"))
+```
+
+## Test of Independence
+
+Tests whether two categorical variables are **associated** or **independent** using a contingency table.
+
+$$\chi^2 = \sum_{i}\sum_{j} \frac{(O_{ij} - E_{ij})^2}{E_{ij}}, \quad E_{ij} = \frac{(\text{row total}_i)(\text{col total}_j)}{n}$$
+
+df $= (\text{rows} - 1) \times (\text{columns} - 1)$
+
+**Example:** Is there a relationship between gender and product preference?
+
+```{r independence-test}
+# 2×2 contingency table: Gender × Preference
+survey_table <- matrix(c(30, 20,
+                         25, 25),
+                       nrow = 2, byrow = TRUE,
+                       dimnames = list(Gender     = c("Male", "Female"),
+                                       Preference = c("Product A", "Product B")))
+
+survey_table
+
+# Chi-squared test of independence
+chi_ind <- chisq.test(survey_table)
+chi_ind
+
+# View expected counts under H0 (independence)
+chi_ind$expected
+```
+
+> **Assumption:** All expected cell counts should be $\geq 5$. If not, use **Fisher's Exact Test** (`fisher.test()`) instead.
+
+------------------------------------------------------------------------
+
+# Mathematical Foundations
+
+## The Chi-Squared Distribution
+
+The $\chi^2$ distribution arises when you **square and sum** independent standard Normal random variables:
+
+$$\chi^2_k = \sum_{i=1}^{k} Z_i^2, \quad Z_i \sim \mathcal{N}(0,1)$$
+
+Properties:
+
+| Property | Detail |
+|----------|--------|
+| Shape | Right-skewed; approaches Normal as df increases |
+| Support | $[0, \infty)$ — always non-negative (sum of squares) |
+| Mean | $k$ (degrees of freedom) |
+| Variance | $2k$ |
+
+```{r chisq-distribution, fig.align='center', fig.width=8, fig.height=4}
+x <- seq(0, 30, length.out = 300)
+
+plot(NULL, xlim = c(0, 30), ylim = c(0, 0.25),
+     main = "Chi-Squared Distribution for Different df",
+     xlab = expression(chi^2), ylab = "Density")
+
+dfs    <- c(2, 5, 10, 15)
+colours <- c("steelblue", "seagreen", "mediumpurple", "tomato")
+
+for (i in seq_along(dfs)) {
+  lines(x, dchisq(x, df = dfs[i]),
+        col = colours[i], lwd = 2)
+}
+
+legend("topright",
+       legend = paste0("df = ", dfs),
+       col    = colours,
+       lwd    = 2, bty = "n")
+```
+
+## Degrees of Freedom
+
+**Degrees of freedom (df)** control the shape of the $\chi^2$ distribution and depend on the test:
+
+| Test | df formula | Intuition |
+|------|-----------|-----------|
+| Goodness-of-fit | $k - 1$ | $k$ categories; 1 constraint (counts sum to $n$) |
+| Test of independence | $(r-1)(c-1)$ | $r$ rows, $c$ columns; row and column totals are fixed |
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## `shapiro.test()` — Normality Check
+
+```{r shapiro}
+sample_data <- c(12, 15, 14, 10, 13, 16, 14, 11, 15, 13)
+
+shapiro.test(sample_data)
+```
+
+```{r qq-plot, fig.align='center', fig.width=8, fig.height=4}
+par(mfrow = c(1, 2))
+
+# Histogram
+hist(sample_data,
+     col    = "steelblue",
+     border = "white",
+     main   = "Histogram",
+     xlab   = "Value")
+
+# Q-Q plot: points near the line → approximately Normal
+qqnorm(sample_data, main = "Normal Q-Q Plot",
+       col = "steelblue", pch = 16)
+qqline(sample_data, col = "darkred", lwd = 2)
+
+par(mfrow = c(1, 1))
+```
+
+**Interpreting `shapiro.test()`:**
+
+| p-value | Conclusion |
+|---------|-----------|
+| $> 0.05$ | No significant departure from normality |
+| $\leq 0.05$ | Evidence that data is **not** normally distributed |
+
+> ⚠️ With large samples, Shapiro-Wilk detects trivially small deviations. Always combine with the Q-Q plot for a fuller picture.
+
+## `var.test()` — Equal Variances Check
+
+```{r var-test}
+group_A <- c(10, 12, 11, 13, 12)
+group_B <- c(14, 18, 15, 17, 16)
+
+var.test(group_A, group_B)
+```
+
+```{r var-boxplot, fig.align='center', fig.width=6, fig.height=4}
+boxplot(group_A, group_B,
+        names  = c("Group A", "Group B"),
+        col    = c("steelblue", "lightcoral"),
+        border = c("navy", "darkred"),
+        main   = "Spread Comparison: Group A vs Group B",
+        ylab   = "Value")
+```
+
+**Interpreting `var.test()`:**
+
+| p-value | Conclusion |
+|---------|-----------|
+| $> 0.05$ | Variances are not significantly different → `var.equal = TRUE` is defensible |
+| $\leq 0.05$ | Variances differ significantly → use Welch's t-test (default) |
+
+## `chisq.test()` — Categorical Inference
+
+```{r chisq-both}
+# --- Goodness-of-fit ---
+observed_counts <- c(18, 22, 20)          # 3 categories
+chisq.test(observed_counts,
+           p = c(1/3, 1/3, 1/3))         # expected: equal proportions
+
+# --- Test of independence ---
+data_table <- matrix(c(30, 20, 25, 25),
+                     nrow = 2, byrow = TRUE)
+chisq.test(data_table)
+```
+
+### What `chisq.test()` returns
+
+| Output element | Meaning |
+|---------------|---------|
+| `$statistic` | Computed $\chi^2$ value |
+| `$p.value` | Probability of result under $H_0$ |
+| `$expected` | Expected counts under $H_0$ |
+| `$residuals` | $(O-E)/\sqrt{E}$ — large values indicate which cells drive the result |
+
+```{r chisq-residuals}
+# Inspect residuals to see which cells contribute most
+chi_ind$residuals
+```
+
+------------------------------------------------------------------------
+
+# Choosing the Right Test: Decision Guide
+
+```{r decision-guide, echo=FALSE}
+guide <- data.frame(
+  "Data type"       = c("Continuous", "Continuous", "Continuous", "Categorical", "Categorical"),
+  "Groups"          = c("1", "2 independent", "2 paired", "1 (vs theory)", "2 variables"),
+  "Assumption met?" = c("Normal", "Normal + equal var", "Normal differences",
+                        "Expected ≥ 5", "Expected ≥ 5"),
+  "Use"             = c("One-sample t-test", "Welch two-sample t-test",
+                        "Paired t-test", "χ² goodness-of-fit",
+                        "χ² test of independence"),
+  "R function"      = c("t.test(x, mu=)", "t.test(x, y)",
+                        "t.test(x, y, paired=TRUE)",
+                        "chisq.test(x, p=)", "chisq.test(table)"),
+  check.names = FALSE
+)
+knitr::kable(guide, align = "lllll",
+             caption = "Quick-reference test selection guide")
+```
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Normality assumption | Check with Shapiro-Wilk + Q-Q plot; CLT helps for large $n$ |
+| Equal variances | Check with `var.test()`; use Welch's t-test when in doubt |
+| Independence | Ensured by study design (random sampling / assignment) |
+| Goodness-of-fit | $\chi^2$ compares observed vs theoretical distribution; df $= k-1$ |
+| Test of independence | $\chi^2$ tests association in a contingency table; df $= (r-1)(c-1)$ |
+| Chi-squared distribution | Right-skewed; sum of squared Normals; mean = df |
+| Expected counts | Must be $\geq 5$ per cell; otherwise use Fisher's Exact Test |
+| R: `shapiro.test()` | $p > 0.05$ → normality is plausible |
+| R: `var.test()` | $p > 0.05$ → equal variances are plausible |
+| R: `chisq.test()` | Works for both goodness-of-fit and independence |
+| `$residuals` | Pinpoints which cells drive a significant $\chi^2$ result |

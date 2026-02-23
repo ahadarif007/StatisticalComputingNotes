@@ -1,0 +1,259 @@
+---
+title: "Chapter 9: Likelihood-Based Inference and Estimation"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+
+# Shared dataset used throughout
+obs_data <- c(10, 12, 11, 13, 12)
+```
+
+------------------------------------------------------------------------
+
+# Likelihood Theory
+
+## Likelihood vs Probability
+
+These two concepts are often confused, but they answer fundamentally different questions:
+
+| Concept | Question answered | What varies | What is fixed |
+|---------|-----------------|------------|--------------|
+| **Probability** | How likely is this *data* given these parameters? | Data (outcomes) | Parameters |
+| **Likelihood** | How well do these *parameters* explain this data? | Parameters | Data (observed) |
+
+Formally, for a parameter $\theta$ and observed data $\mathbf{x}$:
+
+$$\mathcal{L}(\theta \mid \mathbf{x}) = P(\mathbf{x} \mid \theta)$$
+
+The **same mathematical expression** is interpreted differently: as a probability (varying $\mathbf{x}$, fixed $\theta$) or as a likelihood (varying $\theta$, fixed $\mathbf{x}$).
+
+> **Intuition:** You find footprints in the snow. Probability asks *"given this animal, how likely are these tracks?"* Likelihood asks *"given these tracks, which animal most likely made them?"*
+
+## Maximum Likelihood Principle
+
+The **Maximum Likelihood Estimator (MLE)** $\hat{\theta}$ is the parameter value that makes the observed data *most probable*:
+
+$$\hat{\theta} = \arg\max_{\theta}\; \mathcal{L}(\theta \mid \mathbf{x})$$
+
+**Key idea:** Among all possible parameter values, choose the one that gives the observed data the highest probability of occurring.
+
+------------------------------------------------------------------------
+
+# MLE Construction
+
+## Likelihood Functions
+
+For $n$ independent observations from the same distribution with parameter $\theta$, the **joint likelihood** is the product of individual densities/probabilities:
+
+$$\mathcal{L}(\theta \mid x_1, \ldots, x_n) = \prod_{i=1}^{n} f(x_i \mid \theta)$$
+
+**Example — Normal likelihood** (unknown $\mu$, known $\sigma = 1$):
+
+$$\mathcal{L}(\mu \mid \mathbf{x}) = \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi}} \exp\!\left(-\frac{(x_i - \mu)^2}{2}\right)$$
+
+## Log-Likelihoods
+
+Products over many observations quickly become numerically tiny (floating-point underflow). Taking the **logarithm** converts the product into a sum and preserves the location of the maximum:
+
+$$\ell(\theta \mid \mathbf{x}) = \log \mathcal{L}(\theta \mid \mathbf{x}) = \sum_{i=1}^{n} \log f(x_i \mid \theta)$$
+
+Since $\log$ is monotone increasing:
+$$\arg\max_\theta\; \mathcal{L}(\theta) = \arg\max_\theta\; \ell(\theta)$$
+
+> **Why log?** Sums are numerically stable and analytically simpler than products — derivatives of sums are sums of derivatives.
+
+## Derivatives and Optimisation Logic
+
+To find the MLE analytically, differentiate the log-likelihood with respect to $\theta$ and set equal to zero:
+
+$$\frac{d\ell}{d\theta} = 0 \quad \Rightarrow \quad \hat{\theta}_{\text{MLE}}$$
+
+Confirm it is a maximum (not minimum) by checking the second derivative is negative:
+
+$$\frac{d^2\ell}{d\theta^2}\bigg|_{\hat{\theta}} < 0$$
+
+------------------------------------------------------------------------
+
+# Analytical MLEs
+
+## Normal Distribution Parameters
+
+Given $X_i \sim \mathcal{N}(\mu, \sigma^2)$, the log-likelihood is:
+
+$$\ell(\mu, \sigma^2) = -\frac{n}{2}\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^n (x_i - \mu)^2$$
+
+Solving $\partial\ell/\partial\mu = 0$ and $\partial\ell/\partial\sigma^2 = 0$:
+
+$$\hat{\mu}_{\text{MLE}} = \bar{x} = \frac{1}{n}\sum x_i \qquad \hat{\sigma}^2_{\text{MLE}} = \frac{1}{n}\sum(x_i - \bar{x})^2$$
+
+> **Note:** $\hat{\sigma}^2_{\text{MLE}}$ divides by $n$, not $n-1$. It is a **biased** estimator of the population variance. The unbiased sample variance $s^2$ uses $n-1$ (Bessel's correction from Chapter 2).
+
+## Poisson Parameter Estimation
+
+Given $X_i \sim \text{Poisson}(\lambda)$, the log-likelihood is:
+
+$$\ell(\lambda) = \sum_{i=1}^n x_i \cdot \log\lambda - n\lambda - \sum_{i=1}^n \log(x_i!)$$
+
+Setting $d\ell/d\lambda = 0$:
+
+$$\hat{\lambda}_{\text{MLE}} = \bar{x}$$
+
+The MLE of the Poisson rate is simply the sample mean — elegant and intuitive.
+
+## MLE vs Unbiased Estimators
+
+| Property | MLE | Unbiased Estimator |
+|---------|-----|-------------------|
+| **Definition** | Maximises likelihood | Expected value = true parameter |
+| **Bias** | Can be biased (e.g. $\hat{\sigma}^2$) | Zero bias by construction |
+| **Variance** | Achieves Cramér-Rao lower bound (efficient) | May have higher variance |
+| **Consistency** | $\hat{\theta} \to \theta$ as $n \to \infty$ | Usually consistent |
+| **Asymptotic normality** | $\hat{\theta} \approx \mathcal{N}(\theta, 1/\mathcal{I}(\theta))$ | Varies |
+
+> **Bottom line:** MLE trades a small bias for lower variance. For large $n$, the bias vanishes and MLE is optimal. For small $n$, prefer unbiased estimators like $s^2$.
+
+------------------------------------------------------------------------
+
+# R Coverage
+
+## Writing Likelihood Functions Manually
+
+```{r log-likelihood-function}
+# Log-likelihood for Normal distribution with known σ = 1
+# We vary μ and see how the likelihood changes
+
+log_likelihood_normal <- function(mu, data = obs_data, sigma = 1) {
+  sum(dnorm(data, mean = mu, sd = sigma, log = TRUE))
+}
+
+# Test at a few candidate values of μ
+candidate_mus <- c(9, 10, 11, 11.6, 12, 13)
+ll_values     <- sapply(candidate_mus, log_likelihood_normal)
+
+data.frame(mu = candidate_mus,
+           log_likelihood = round(ll_values, 4))
+```
+
+```{r likelihood-profile-plot, fig.align='center', fig.width=8, fig.height=4}
+# Plot the full likelihood profile across a range of μ values
+mu_grid  <- seq(8, 15, length.out = 200)
+ll_grid  <- sapply(mu_grid, log_likelihood_normal)
+
+plot(mu_grid, ll_grid,
+     type = "l", lwd = 2, col = "steelblue",
+     main = "Log-Likelihood Profile: Normal(μ, σ=1)",
+     xlab = expression(mu),
+     ylab = "Log-Likelihood")
+
+# Mark the MLE (should equal the sample mean)
+mle_mu <- mean(obs_data)
+abline(v  = mle_mu, col = "darkred",  lwd = 2, lty = 2)
+abline(h  = log_likelihood_normal(mle_mu),
+       col = "seagreen", lwd = 1.5, lty = 3)
+
+legend("bottomleft",
+       legend = c("Log-Likelihood", paste0("MLE: μ̂ = ", mle_mu)),
+       col    = c("steelblue", "darkred"),
+       lty    = c(1, 2), lwd = 2, bty = "n")
+```
+
+## Using `optim()` to Find the MLE
+
+When analytical solutions are unavailable, use numerical optimisation. `optim()` *minimises* by default, so we pass the **negative** log-likelihood.
+
+```{r optim-mle}
+neg_log_lik <- function(mu) -log_likelihood_normal(mu)
+
+# Starting guess for μ
+result <- optim(par    = 10,           # initial guess
+                fn     = neg_log_lik,
+                method = "Brent",      # 1D optimisation
+                lower  = 5,
+                upper  = 20)
+
+cat("MLE via optim()    :", round(result$par, 6), "\n")
+cat("MLE via sample mean:", mean(obs_data), "\n")
+cat("Converged?         :", result$convergence == 0, "\n")
+```
+
+## Comparing Likelihood at Different Parameter Values
+
+Visually comparing likelihood across candidates builds intuition for what "most likely" means.
+
+```{r likelihood-comparison, fig.align='center', fig.width=8, fig.height=4}
+# Convert log-likelihood to likelihood (exponentiate) for visualisation
+# Normalise so the maximum = 1 (relative likelihood)
+ll_rel <- exp(ll_grid - max(ll_grid))
+
+plot(mu_grid, ll_rel,
+     type = "l", lwd = 2, col = "steelblue",
+     main = "Relative Likelihood: Normal(μ, σ=1)",
+     xlab = expression(mu),
+     ylab = "Relative Likelihood")
+
+abline(v = mle_mu, col = "darkred", lwd = 2, lty = 2)
+abline(h = exp(-2), col = "grey40", lwd = 1.5, lty = 3)
+
+legend("bottomleft",
+       legend = c("Relative Likelihood",
+                  paste0("MLE: μ̂ = ", mle_mu),
+                  "1/e² threshold (likelihood CI boundary)"),
+       col    = c("steelblue", "darkred", "grey40"),
+       lty    = c(1, 2, 3), lwd = 2, bty = "n")
+```
+
+> **Likelihood-based CI:** The range of $\mu$ values where relative likelihood $\geq e^{-2} \approx 0.135$ forms an approximate 95% **likelihood interval** for $\mu$ — a useful alternative to t-based confidence intervals.
+
+## `mle()` from the `stats4` Package
+
+```{r mle-package}
+library(stats4)
+
+# Define negative log-likelihood as a function of mu
+nll <- function(mu) -log_likelihood_normal(mu)
+
+# mle() finds the minimum of nll (= maximum of log-likelihood)
+mle_fit <- mle(nll, start = list(mu = 10))
+
+summary(mle_fit)
+```
+
+```{r mle-ci}
+# Likelihood-based confidence interval from profile likelihood
+confint(mle_fit)
+```
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|---------|-------------|
+| Likelihood $\mathcal{L}(\theta \mid \mathbf{x})$ | How well does $\theta$ explain the observed data? |
+| vs Probability | Probability varies data; likelihood varies parameters |
+| MLE $\hat{\theta}$ | Parameter value that maximises $\mathcal{L}$ (or $\ell$) |
+| Log-likelihood $\ell$ | Log of $\mathcal{L}$; sum replaces product; same optimum |
+| Normal MLE | $\hat{\mu} = \bar{x}$; $\hat{\sigma}^2 = \frac{1}{n}\sum(x_i-\bar{x})^2$ (biased) |
+| Poisson MLE | $\hat{\lambda} = \bar{x}$ |
+| MLE bias | MLE $\hat{\sigma}^2$ uses $n$; unbiased $s^2$ uses $n-1$ |
+| MLE efficiency | Achieves minimum possible variance (Cramér-Rao bound) for large $n$ |
+| R: `dnorm(..., log=TRUE)` | Computes log-density; sum over observations = log-likelihood |
+| R: `optim()` | Numerical MLE; minimise negative log-likelihood; check `convergence == 0` |
+| R: `mle()` (stats4) | Higher-level MLE with automatic SE and profile CI via `confint()` |
+| Likelihood interval | Range where relative likelihood $\geq e^{-2}$ ≈ 95% CI alternative |

@@ -1,0 +1,205 @@
+---
+title: "Chapter 2: Descriptive Statistics and Variability"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Measures of Location
+
+Measures of location (also called **measures of central tendency**) describe the "centre" of a dataset — a single value that best represents all observations.
+
+## Mean
+
+The **mean** is the arithmetic average: sum all values, then divide by the count.
+
+$$\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i$$
+
+-   Sensitive to extreme values (outliers).
+-   Best used when data is roughly symmetric with no outliers.
+
+## Median
+
+The **median** is the middle value when data is sorted in ascending order.
+
+-   If *n* is odd → middle observation.
+-   If *n* is even → average of the two middle observations.
+-   **Robust** to outliers, making it preferable for skewed distributions.
+
+## Mode
+
+The **mode** is the most frequently occurring value in the dataset.
+
+-   A dataset can have **no mode**, **one mode** (unimodal), or **multiple modes** (bimodal, multimodal).
+-   Especially useful for categorical data.
+
+### Quick comparison
+
+| Measure | Sensitive to Outliers? | Best for                                    |
+|---------|------------------------|---------------------------------------------|
+| Mean    | Yes                    | Symmetric, no-outlier data                  |
+| Median  | No                     | Skewed data or data with outliers           |
+| Mode    | No                     | Categorical data; finding most common value |
+
+------------------------------------------------------------------------
+
+# Measures of Spread
+
+Measures of spread (also called **measures of dispersion**) describe how much the data values vary from each other and from the centre.
+
+## Variance
+
+**Variance** measures the average squared distance of each data point from the mean.
+
+$$s^2 = \frac{1}{n-1} \sum_{i=1}^{n} (x_i - \bar{x})^2$$
+
+The denominator uses $n - 1$ (not $n$) for sample variance — this is the **degrees of freedom correction** that makes it an unbiased estimator of the population variance $\sigma^2$.
+
+## Standard Deviation
+
+**Standard deviation** is the square root of variance, bringing the units back in line with the original data.
+
+$$s = \sqrt{s^2}$$
+
+-   Interpretable in the same units as the data (e.g., kg, °C).
+-   Roughly: "the typical distance of a data point from the mean."
+
+## Sample vs Population Dispersion
+
+| Formula | Symbol | When to use |
+|----|----|----|
+| $\sigma^2 = \frac{1}{N}\sum(x_i - \mu)^2$ | Population variance | You have the *entire* population |
+| $s^2 = \frac{1}{n-1}\sum(x_i - \bar{x})^2$ | Sample variance | You have a *sample* drawn from the population |
+
+> **Key insight:** Using $n-1$ instead of $n$ corrects for the fact that a sample tends to underestimate the population spread. This correction is called **Bessel's correction**.
+
+------------------------------------------------------------------------
+
+# Mathematical Structure
+
+## Variance as an Expectation
+
+Variance can be expressed formally using the **expectation operator** $E[\cdot]$:
+
+$$\text{Var}(X) = E\left[(X - \mu)^2\right] = E[X^2] - (E[X])^2$$
+
+This framing reminds us that variance is not just a formula — it is the **expected squared deviation** from the mean, a fundamental property of any random variable.
+
+## Degrees of Freedom and Bias
+
+When we estimate population variance from a sample:
+
+-   We *use* the sample mean $\bar{x}$ (not the true $\mu$) to compute deviations.
+-   This introduces a dependency: once you know $n-1$ deviations and the mean, the last deviation is fixed.
+-   So only $n - 1$ deviations are **free to vary** → degrees of freedom = $n - 1$.
+
+Using $n$ in the denominator produces a **biased** estimate (systematically too small). Using $n - 1$ removes this bias.
+
+------------------------------------------------------------------------
+
+# R Implementation
+
+## Built-in Functions: `mean()`, `median()`, `sd()`, `var()`
+
+```{r built-in-functions}
+# Dataset with a clear outlier
+data <- c(10, 20, 30, 40, 100)
+
+mean(data)     # arithmetic average — pulled up by the outlier
+median(data)   # middle value — unaffected by the outlier
+sd(data)       # standard deviation
+var(data)      # variance (sd squared)
+```
+
+Notice how the **mean (40)** is much higher than the **median (30)** because of the outlier `100`. The median gives a better sense of the "typical" value here.
+
+## Implementing Estimators from Definitions
+
+Building estimators by hand deepens understanding and is useful for custom measures not covered by built-in functions.
+
+```{r manual-estimators}
+data <- c(10, 20, 30, 40, 100)
+n    <- length(data)
+
+# --- Sample mean (from definition) ---
+mean_manual <- sum(data) / n
+mean_manual
+
+# --- Sample variance (from definition, using n-1) ---
+deviations       <- data - mean_manual        # xi - x̄
+squared_devs     <- deviations^2              # (xi - x̄)²
+variance_manual  <- sum(squared_devs) / (n - 1)
+variance_manual
+
+# Verify against built-in
+all.equal(mean_manual,     mean(data))
+all.equal(variance_manual, var(data))
+```
+
+## Robustness and Outlier Analysis
+
+**Robustness** refers to how resistant a statistic is to extreme values. A statistic is *robust* if a small number of outliers cannot change it dramatically.
+
+```{r robustness}
+# Two datasets: one clean, one with an extreme outlier
+clean   <- c(10, 20, 30, 40, 50)
+outlier <- c(10, 20, 30, 40, 1000)
+
+# Compare how mean and median react
+cat("Mean  — clean:", mean(clean),   " | with outlier:", mean(outlier),   "\n")
+cat("Median— clean:", median(clean), " | with outlier:", median(outlier), "\n")
+```
+
+```{r robustness-plot, fig.align='center', fig.width=8, fig.height=4}
+par(mfrow = c(1, 2))
+
+boxplot(clean,
+        main   = "Clean Data",
+        ylab   = "Value",
+        col    = "steelblue",
+        border = "navy")
+
+boxplot(outlier,
+        main   = "Data with Outlier",
+        ylab   = "Value",
+        col    = "lightcoral",
+        border = "darkred")
+
+par(mfrow = c(1, 1))
+```
+
+> **Rule of thumb:** If `mean` and `median` differ substantially, suspect skewness or outliers. Always pair numerical summaries with a boxplot or histogram.
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Concept | Key Takeaway |
+|----|----|
+| Mean | Average; sensitive to outliers |
+| Median | Middle value; robust to outliers |
+| Mode | Most frequent value; useful for categorical data |
+| Variance $s^2$ | Average squared deviation from the mean |
+| Standard Deviation $s$ | Typical distance from the mean; same units as data |
+| Population vs Sample | Use $N$ for populations; use $n-1$ (Bessel's correction) for samples |
+| Degrees of Freedom | Number of values free to vary = $n - 1$ |
+| Robustness | Median and IQR are robust; mean and SD are not |
+| R functions | `mean()`, `median()`, `sd()`, `var()` |

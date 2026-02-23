@@ -1,0 +1,167 @@
+---
+title: "Chapter 1: Statistical Foundations and Data Concepts"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+
+------------------------------------------------------------------------
+
+# Populations, Samples, and Parameters
+
+## Population vs Sample
+
+A **population** is the entire group you want to study.\
+A **sample** is a smaller, manageable subset drawn from that population for analysis.
+
+> **Why sample?** Studying an entire population is often impractical or impossible. A well-chosen sample lets us draw conclusions about the population without measuring every member.
+
+## Parameters vs Statistics
+
+| Term | Definition | Example |
+|------------------------|------------------------|------------------------|
+| **Parameter** | A numerical value that describes the *population* | Population mean μ |
+| **Statistic** | A numerical value calculated from a *sample* | Sample mean x̄ |
+
+Parameters are typically unknown; statistics are what we compute and use to *estimate* parameters.
+
+## Sampling Variability and Randomness
+
+**Sampling variability** is the natural difference you see between statistics from different samples drawn from the same population. No two samples are exactly alike.
+
+**Randomness** ensures that every member of the population has a fair, unbiased chance of being selected, which is what makes our sample representative.
+
+------------------------------------------------------------------------
+
+# Data Types and Structure
+
+## Categorical vs Numerical Data
+
+-   **Categorical data** — represents groups or labels (e.g., blood type, gender, country).
+-   **Numerical data** — represents measurable quantities (e.g., weight, temperature, salary).
+
+## Discrete vs Continuous Variables
+
+| Variable Type | Description | Examples |
+|------------------------|------------------------|------------------------|
+| **Discrete** | Countable whole numbers; gaps exist between values | Number of students, coin flips |
+| **Continuous** | Any value within a range; decimals allowed | Height, temperature, reaction time |
+
+## Measurement Scales
+
+The scale of measurement determines what statistical operations are meaningful.
+
+| Scale | Properties | Examples |
+|------------------------|------------------------|------------------------|
+| **Nominal** | Categories only; no order | Eye colour, gender |
+| **Ordinal** | Ordered categories; differences not meaningful | Satisfaction level, class rank |
+| **Interval** | Equal gaps; no true zero | Temperature in °C, calendar year |
+| **Ratio** | Equal gaps + true zero | Weight, height, age |
+
+> **Tip:** The higher the scale, the more statistical techniques you can apply. Ratio data supports the widest range of analyses.
+
+------------------------------------------------------------------------
+
+# R Foundations
+
+## Creating Data and Sampling with `sample()`
+
+The most fundamental structure in R is the **vector** — an ordered collection of values of the same type.
+
+```{r vectors-and-sampling}
+# Create a simple numeric vector using c()
+x <- c(5, 10, 15, 20)
+x
+
+# Draw 10 random numbers from 1–100 (with replacement)
+# replace = TRUE allows the same number to appear more than once
+set.seed(42)                          # set seed for reproducibility
+sample_data <- sample(1:100, size = 10, replace = TRUE)
+sample_data
+```
+
+**Why `set.seed()`?** It fixes the random number generator so your results are reproducible — anyone running the same code gets the same output.
+
+## Basic Summaries with `summary()`
+
+`summary()` gives you a five-number summary (plus the mean) in one call — a great first step when exploring new data.
+
+```{r summary-demo}
+data <- c(12, 15, 20, 25, 30, 35, 40)
+
+summary(data)
+```
+
+| Output  | Meaning                        |
+|---------|--------------------------------|
+| Min.    | Smallest value                 |
+| 1st Qu. | 25th percentile                |
+| Median  | Middle value (50th percentile) |
+| Mean    | Arithmetic average             |
+| 3rd Qu. | 75th percentile                |
+| Max.    | Largest value                  |
+
+## Initial Exploratory Plots
+
+Visualising data before formal analysis helps you spot patterns, outliers, and the overall shape of the distribution.
+
+```{r exploratory-plots, fig.align='center', fig.width=8, fig.height=4}
+set.seed(42)
+data <- sample(1:100, size = 50, replace = TRUE)
+
+# --- Side-by-side plots ---
+par(mfrow = c(1, 2))
+
+# Histogram: shows the frequency/distribution of values
+hist(data,
+     main  = "Histogram of Sample Data",
+     xlab  = "Value",
+     col   = "steelblue",
+     border = "white")
+
+# Boxplot: highlights median, spread, and potential outliers
+boxplot(data,
+        main   = "Boxplot of Sample Data",
+        ylab   = "Value",
+        col    = "lightcoral",
+        border = "darkred")
+
+par(mfrow = c(1, 1))   # reset layout
+```
+
+### What to look for
+
+-   **Histogram** — Is the distribution symmetric, skewed left, or skewed right? Any unusual gaps?\
+-   **Boxplot** — Where is the median (centre line)? Are there points outside the whiskers (outliers)?
+
+------------------------------------------------------------------------
+
+# Chapter Summary
+
+| Topic | Key Takeaway |
+|------------------------------------|------------------------------------|
+| Population vs Sample | Samples are used to make inferences about populations |
+| Parameters vs Statistics | Parameters describe populations; statistics describe samples |
+| Sampling Variability | Different samples from the same population yield different statistics |
+| Data Types | Categorical (labels) vs Numerical (quantities) |
+| Variable Types | Discrete (countable) vs Continuous (measurable) |
+| Measurement Scales | Nominal → Ordinal → Interval → Ratio (increasing power) |
+| R: `c()`, `sample()` | Build vectors and draw random samples |
+| R: `summary()` | Quick five-number summary for any numeric vector |
+| R: `hist()`, `boxplot()` | Core tools for initial visual exploration |
