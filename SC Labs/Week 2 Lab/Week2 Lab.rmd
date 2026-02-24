@@ -1,0 +1,909 @@
+---
+title: "Week 2 Lab"
+output:
+  html_document:
+    df_print: paged
+header-includes:
+- \usepackage{libertine}
+- \usepackage[scaled=0.83]{beramono}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+You should verify all results using R, even if you compute them
+analytically first.
+
+# Probability
+
+1.  A \textit{Magic the Gathering} deck of cards contains 60 cards; 20
+    of the cards are land cards and the remaining 40 cards are non-land
+    cards. If I draw seven cards from the deck at random, what is the
+    probability that I get: Use R to compute all probabilities
+    numerically. You may use `dhyper()` and `phyper()`.
+
+    -   three land cards?
+    -   more than three land cards?
+    -   between two and four land cards?
+
+    What is the expected number of land cards when I draw seven cards at
+    random?
+
+    For this you need to think about what type of distribution it is.
+    You can use Wikipedia. Compared to the lecture notes, it sounds like
+    it is Binomial Distribution, but this is NOT the case. Binomial
+    Distribution is every experiment is independent, this example is not
+    as when you draw one card it changes the probability of the next
+    one.
+
+    This situation is not binomial, because the draws are not
+    independent. The appropriate model is the hypergeometric
+    distribution.
+
+```{r hypergeometric}
+# Hypergeometric distribution: 60 cards total, 20 land, 40 non-land, draw 7
+
+# i. Probability of exactly three land cards
+p_three_land <- dhyper(3, m = 20, n = 40, k = 7)
+cat("P(exactly 3 land cards) =", p_three_land, "\n")
+
+# ii. Probability of more than three land cards
+p_more_than_three <- 1 - phyper(3, m = 20, n = 40, k = 7)
+cat("P(more than 3 land cards) =", p_more_than_three, "\n")
+
+# iii. Probability of between two and four land cards (inclusive)
+p_two_to_four <- sum(dhyper(2:4, m = 20, n = 40, k = 7))
+cat("P(between 2 and 4 land cards) =", p_two_to_four, "\n")
+# Alternative using phyper:
+p_two_to_four_alt <- diff(phyper(c(1, 4), m = 20, n = 40, k = 7))
+cat("P(between 2 and 4 land cards) [alt] =", p_two_to_four_alt, "\n")
+
+# Expected number of land cards
+# For hypergeometric: E[X] = n * K / N = 7 * 20 / 60
+expected_land <- 7 * 20 / 60
+cat("Expected number of land cards =", expected_land, "\n")
+```
+
+**Interpretation:** This is a hypergeometric distribution because draws
+are without replacement — drawing one card changes the probability of
+drawing a land card next. The expected number of land cards in a hand of
+7 is 7 × (20/60) = 7/3 ≈ 2.33.
+
+2.  The birthday problem is a famous problem in probability, in which we
+    calculate how many people we would need to gather in a room before
+    there is at least a $0.5$ probability that at least two of these
+    people share a birthday. We assume that birthdays are uniformly
+    distributed across the year, and that all birthdays are independent
+    (i.e. no twins). Use `R` to calculate the probability for a room
+    with $n$ people and plot the probabilities for various values of
+    $n$. Use a reference line to show $p = 0.5$ on your plot. Choose
+    sensible limits for the $x$ and $y$ axes.
+
+Write a function that computes the probability for a given n. Use R to
+generate the plot.
+
+```{r birthday_problem}
+# Function to compute the probability that ALL n people have DIFFERENT birthdays
+prob_all_diff <- function(N) {
+  if (N <= 1) return(1)
+  return(prob_all_diff(N - 1) * (365 - (N - 1)) / 365)
+}
+
+# Probability that at least two people share a birthday
+prob_shared <- function(N) {
+  return(1 - prob_all_diff(N))
+}
+
+# Generate probabilities for n = 1 to 60
+n_values <- 1:60
+p_values <- sapply(n_values, prob_shared)
+
+# Find the smallest n for which the probability exceeds 0.5
+n_threshold <- min(which(p_values >= 0.5))
+cat("Smallest n where P(shared birthday) >= 0.5:", n_threshold, "\n")
+cat("Probability at n =", n_threshold, ":", p_values[n_threshold], "\n")
+
+# Plot
+plot(n_values, p_values,
+     type = "l", lwd = 2, col = "steelblue",
+     xlab = "Number of people in room",
+     ylab = "Probability of at least one shared birthday",
+     main = "Birthday Problem",
+     xlim = c(1, 60), ylim = c(0, 1))
+abline(h = 0.5, col = "red", lty = 2, lwd = 2)
+abline(v = n_threshold, col = "darkgreen", lty = 3, lwd = 1.5)
+legend("bottomright",
+       legend = c("P(shared birthday)", "p = 0.5", paste("n =", n_threshold)),
+       col = c("steelblue", "red", "darkgreen"),
+       lty = c(1, 2, 3), lwd = 2)
+```
+
+**Finding:** In a room of just **23 people**, the probability that at
+least two of them share a birthday exceeds 0.5. This is a
+counter-intuitive result — most people would guess a much higher number.
+
+# Random Variables
+
+Given the following random variables, use Wikipedia to find the expected
+value and variance. Make sure to describe what the expected value means
+for each distribution.
+
+-   $X$ is Binomial, with number of trials $n = 12$ and probability of
+    success $p = 0.2$
+-   $A$ is Normal, with mean $\mu = 10$ and standard deviation
+    $\sigma = 5$.
+-   $B$ is Poisson with rate $\lambda = 4.5$.
+
+**Binomial $X \sim B(n=12, p=0.2)$:**
+
+- $E[X] = np = 12 \times 0.2 = 2.4$
+- $\text{Var}(X) = np(1-p) = 12 \times 0.2 \times 0.8 = 1.92$
+- **Interpretation:** On average, we expect 2.4 successes out of 12 trials.
+
+**Normal $A \sim N(\mu=10, \sigma=5)$:**
+
+- $E[A] = \mu = 10$
+- $\text{Var}(A) = \sigma^2 = 25$
+- **Interpretation:** The average value of $A$ is 10.
+
+**Poisson $B \sim \text{Pois}(\lambda=4.5)$:**
+
+- $E[B] = \lambda = 4.5$
+- $\text{Var}(B) = \lambda = 4.5$
+- **Interpretation:** On average, 4.5 events occur per unit of time/space.
+
+```{r random_variables}
+# Verify computations in R
+n <- 12; p <- 0.2
+cat("Binomial E[X] =", n * p, "  Var(X) =", n * p * (1 - p), "\n")
+
+mu <- 10; sigma <- 5
+cat("Normal E[A] =", mu, "  Var(A) =", sigma^2, "\n")
+
+lambda <- 4.5
+cat("Poisson E[B] =", lambda, "  Var(B) =", lambda, "\n")
+```
+
+# Poisson approximation to binomial
+
+Suppose that the Binomial distribution with parameters $n$ and $p$ is an
+appropriate model for a random variable $X$. If $n \ge 20$ and
+$p \le 0.05$, it can be shown that Poisson distribution can be used
+instead, as a good approximation, to work out probabilities about X.
+
+The approximation is excellent if $n \ge 100$ and $np \le 10$.
+
+Suppose that 1% of screws produced in a factory are defective. If 100
+screws are selected at random, what is the (a) exact and (b) approximate
+probability that 5 of them will be defective.
+
+1.  Back to our binomial distribution function
+    $P(X = x) = {n \choose x}p^x(1-p)^{n-x}$, go and calculate
+    $P(X = 5)$, use the built in tools.
+
+```{r binomial_exact}
+# Exact probability using the Binomial distribution
+# n = 100 screws, p = 0.01 (1% defective), find P(X = 5)
+p_exact <- dbinom(5, size = 100, prob = 0.01)
+cat("Exact P(X = 5) using Binomial =", p_exact, "\n")
+```
+
+For binomial we have said the $\mu = E(X) = np$ which in this particular
+case is $(0.01)(100) = 1$\\
+
+For the Poisson distribution the $E(X) = \alpha t$. Putting them
+together we get an approximation for $\alpha t = 1$. We can now
+calculate $P(X=x) = e^{-\alpha t}\frac{(\alpha t)^{x}}{x!}$.
+
+2.  Find $P(X = 5)$ for Poisson
+
+```{r poisson_approx}
+# Approximate probability using the Poisson distribution
+# lambda = np = 100 * 0.01 = 1
+lambda_approx <- 100 * 0.01  # = 1
+p_approx <- dpois(5, lambda = lambda_approx)
+cat("Approximate P(X = 5) using Poisson (lambda =", lambda_approx, ") =", p_approx, "\n")
+
+cat("\nComparison:\n")
+cat("  Binomial (exact):  ", dbinom(5, 100, 0.01), "\n")
+cat("  Poisson (approx):  ", dpois(5, 1), "\n")
+cat("  Difference:        ", abs(dbinom(5, 100, 0.01) - dpois(5, 1)), "\n")
+```
+
+**Are they close?** Yes! The Poisson approximation (≈ 0.003066) is very
+close to the exact binomial probability (≈ 0.002898). The small
+difference confirms the rule: with $n = 100 \ge 100$ and
+$np = 1 \le 10$, the Poisson approximation is excellent.
+
+# Sampling Distribution - Central Limit Theorem
+
+Let's try this in practice
+
+```{r}
+a <- runif(10^6)
+a
+```
+
+Gives us a population of 1,000,000 random numbers. They are definitely
+not normally distributed as it was generated with \texttt{runif} which
+means they are uniformly distributed. Let's plot the histograms
+
+```{r}
+hist(a, breaks = 20, main = "a", col = "lightblue")
+```
+
+Also let's see the statistics
+
+```{r}
+cat("Population mean:", mean(a), "\n")
+cat("Standard deviation:", sd(a), "\n")
+```
+
+From the population of 1,000,000 numbers, we are going to take 1000
+random samples of size 100.
+
+```{r}
+b <- replicate(1000, sample(a, 100, replace = FALSE))
+dim(b)
+```
+
+\texttt{b[,1]} shows us one of these samples.
+
+We now want the mean of each of these samples, so we want the mean of
+the columns, I would like there to be a function that does that! Call
+all these samplemeans sampleMean
+
+```{r}
+# colMeans() computes the mean of each column (each sample)
+sampleMean <- colMeans(b)
+cat("Number of sample means:", length(sampleMean), "\n")
+```
+
+Now plot a histogram of sampleMean set.
+
+```{r}
+hist(sampleMean, breaks = 20, main = "SampleMean", col = "lightblue",
+     xlab = "Sample Mean", ylab = "Frequency")
+```
+
+Looks normal
+
+What are the sample means and standard deviation of the sampleMeans
+
+```{r}
+cat("Mean of sampleMean:", mean(sampleMean), "\n")
+cat("Standard deviation of sampleMean:", sd(sampleMean), "\n")
+```
+
+Sample mean quite close to population mean. SD of sample is quite close
+to SD of the population divided by $\sqrt{n}$
+
+**Verification:** The theoretical SD of the sampling distribution =
+$\frac{\sigma_{population}}{\sqrt{n}} = \frac{\text{sd}(a)}{\sqrt{100}}$.
+
+```{r}
+cat("Theoretical SD of sampling distribution:", sd(a) / sqrt(100), "\n")
+cat("Observed SD of sampleMean:              ", sd(sampleMean), "\n")
+```
+
+This confirms the Central Limit Theorem: regardless of the original
+distribution (here, uniform), the sampling distribution of the mean is
+approximately normal with mean equal to the population mean and standard
+deviation equal to $\sigma / \sqrt{n}$.
+
+# Plotting expected values
+
+```{r}
+library(ggplot2)
+```
+
+The below is showing what I said in class, that the expected value will
+converge to the probability when we make the number of trials go towards
+infinity.
+
+This example is for flipping a coin, the larger the number of trials the
+"closer" it is to the probability of 0.5 i.e. the expected value of
+10,000 trials is 5,000
+
+```{r}
+throw_a_coin <- function(N) {
+  sample(c("H", "T"), size = N, replace = TRUE)
+}
+
+# Define trials
+trials <- c(10, 20, 50, 70, 100, 200, 500, 800, 1000, 2000, 5000, 7000, 10000)
+
+# Compute probability of heads for each trial
+prob_heads <- sapply(trials, function(j) sum(throw_a_coin(j) == "H") / j)
+
+# Create a data frame for plotting
+df <- data.frame(trials = trials, prob_heads = prob_heads)
+
+# Plot the results
+ggplot(df, aes(x = trials, y = prob_heads)) +
+  geom_point() +
+  geom_line(alpha = 0.6) +
+  scale_x_log10() +  # Log scale for x-axis
+  geom_hline(yintercept = 0.5, color = "red") +
+  labs(
+    x = "Number of Trials",
+    y = "Probability of Heads from Simulation",
+    title = "Frequentist Probability of Heads"
+  )
+```
+
+Now something for you to do
+
+Show that the expected value for a 6-sided dice is 3.5 by running trials
+and plotting it as above. Use at least 10,000 trials. Plot the running
+average against the number of trials.
+
+What about a 12-sided dice?
+
+```{r dice_simulation}
+# Function to roll a 6-sided die N times and return the running average
+roll_die <- function(N, sides = 6) {
+  rolls <- sample(1:sides, size = N, replace = TRUE)
+  return(cumsum(rolls) / seq_along(rolls))
+}
+
+set.seed(42)
+
+# --- 6-sided die ---
+N <- 10000
+running_avg_6 <- roll_die(N, sides = 6)
+df6 <- data.frame(trial = 1:N, running_avg = running_avg_6, die = "6-sided (E[X]=3.5)")
+
+# --- 12-sided die ---
+running_avg_12 <- roll_die(N, sides = 12)
+df12 <- data.frame(trial = 1:N, running_avg = running_avg_12, die = "12-sided (E[X]=6.5)")
+
+df_dice <- rbind(df6, df12)
+
+ggplot(df_dice, aes(x = trial, y = running_avg, color = die)) +
+  geom_line(alpha = 0.7) +
+  geom_hline(yintercept = 3.5, color = "blue",  linetype = "dashed", linewidth = 0.8) +
+  geom_hline(yintercept = 6.5, color = "red",   linetype = "dashed", linewidth = 0.8) +
+  scale_x_log10() +
+  labs(
+    x = "Number of Trials (log scale)",
+    y = "Running Average",
+    title = "Convergence of Expected Value – Dice Rolls",
+    color = "Die Type"
+  ) +
+  theme_minimal()
+```
+
+**Interpretation:** The expected value (mean face) of a 6-sided die is
+$(1+2+3+4+5+6)/6 = 3.5$ and for a 12-sided die it is
+$(1+2+\ldots+12)/12 = 6.5$. As the number of trials increases, the
+running average converges to these theoretical values, demonstrating the
+Law of Large Numbers.
+
+# Normal Distribution Probabilities in R
+
+When working with normally distributed random variables, we often need
+to calculate probabilities. In R, we use the `pnorm()` function to
+compute these probabilities.
+
+## The `pnorm()` Function
+
+The `pnorm()` function calculates the cumulative probability P(X ≤ x)
+for a normal distribution.
+
+**Syntax:**
+
+``` r
+pnorm(q, mean = 0, sd = 1, lower.tail = TRUE)
+```
+
+-   `q`: the value(s) at which to evaluate the CDF
+-   `mean`: the mean of the distribution (default is 0)
+-   `sd`: the standard deviation (default is 1)
+-   `lower.tail`: if TRUE (default), returns P(X ≤ q); if FALSE, returns
+    P(X \> q)
+
+------------------------------------------------------------------------
+
+## Example: Heights of Adult Women
+
+Suppose the heights of adult women are normally distributed with: - Mean
+(μ) = 65 inches - Standard deviation (σ) = 3 inches
+
+Let X represent the height of a randomly selected woman.
+
+### Example 1: P(X \< 68)
+
+**Question:** What is the probability that a randomly selected woman is
+shorter than 68 inches?
+
+```{r}
+# P(X < 68) when X ~ N(65, 3)
+prob1 <- pnorm(68, mean = 65, sd = 3)
+print(paste("P(X < 68) =", round(prob1, 4)))
+```
+
+Can also use the z-transform
+
+$P(X < 68) = P(\frac{X-\mu}{\sigma} < \frac{68-\mu}{\sigma}) = P(Z < \frac{68-65}{3}) = P(Z < 1)$
+
+```{r}
+pnorm(1)
+```
+
+**Interpretation:** There is approximately an 84.13% chance that a
+randomly selected woman is shorter than 68 inches.
+
+### Example 2: P(X \> 68)
+
+**Question:** What is the probability that a randomly selected woman is
+taller than 68 inches?
+
+```{r example2}
+# Method 1: Use lower.tail = FALSE
+prob2a <- pnorm(68, mean = 65, sd = 3, lower.tail = FALSE)
+
+# Method 2: Use the complement rule
+prob2b <- 1 - pnorm(68, mean = 65, sd = 3)
+
+print(paste("P(X > 68) =", round(prob2a, 4)))
+print(paste("Verification:", round(prob2b, 4)))
+```
+
+**Interpretation:** There is approximately a 15.87% chance that a
+randomly selected woman is taller than 68 inches.
+
+### Example 3: P(62 \< X \< 68)
+
+**Question:** What is the probability that a randomly selected woman has
+a height between 62 and 68 inches?
+
+```{r example3}
+# P(62 < X < 68) = P(X < 68) - P(X < 62)
+prob_less_68 <- pnorm(68, mean = 65, sd = 3)
+prob_less_62 <- pnorm(62, mean = 65, sd = 3)
+prob3 <- prob_less_68 - prob_less_62
+
+print(paste("P(X < 68) =", round(prob_less_68, 4)))
+print(paste("P(X < 62) =", round(prob_less_62, 4)))
+print(paste("P(62 < X < 68) =", round(prob3, 4)))
+```
+
+**Interpretation:** There is approximately a 68.27% chance that a
+randomly selected woman has a height between 62 and 68 inches.
+
+**Note:** This makes sense! For a normal distribution, about 68% of
+values fall within one standard deviation of the mean (65 ± 3 = [62,
+68]).
+
+------------------------------------------------------------------------
+
+## Visualizing the Probabilities
+
+Let's visualize these probabilities on the normal curve:
+
+```{r visualization, fig.width=10, fig.height=8}
+# Set up the plotting area for 3 plots
+par(mfrow = c(3, 1), mar = c(4, 4, 3, 2))
+
+# Create a sequence of x values for plotting
+x <- seq(55, 75, length.out = 1000)
+y <- dnorm(x, mean = 65, sd = 3)
+
+# Plot 1: P(X < 68)
+plot(x, y, type = "l", lwd = 2, 
+     main = "P(X < 68)", 
+     xlab = "Height (inches)", 
+     ylab = "Density",
+     xlim = c(55, 75))
+# Shade the area
+x_fill <- seq(55, 68, length.out = 1000)
+y_fill <- dnorm(x_fill, mean = 65, sd = 3)
+polygon(c(55, x_fill, 68), c(0, y_fill, 0), col = "lightblue", border = NA)
+abline(v = 68, col = "red", lwd = 2, lty = 2)
+text(68, max(y) * 0.9, "x = 68", pos = 4, col = "red")
+
+# Plot 2: P(X > 68)
+plot(x, y, type = "l", lwd = 2, 
+     main = "P(X > 68)", 
+     xlab = "Height (inches)", 
+     ylab = "Density",
+     xlim = c(55, 75))
+# Shade the area
+x_fill <- seq(68, 75, length.out = 1000)
+y_fill <- dnorm(x_fill, mean = 65, sd = 3)
+polygon(c(68, x_fill, 75), c(0, y_fill, 0), col = "lightcoral", border = NA)
+abline(v = 68, col = "red", lwd = 2, lty = 2)
+text(68, max(y) * 0.9, "x = 68", pos = 2, col = "red")
+
+# Plot 3: P(62 < X < 68)
+plot(x, y, type = "l", lwd = 2, 
+     main = "P(62 < X < 68)", 
+     xlab = "Height (inches)", 
+     ylab = "Density",
+     xlim = c(55, 75))
+# Shade the area
+x_fill <- seq(62, 68, length.out = 1000)
+y_fill <- dnorm(x_fill, mean = 65, sd = 3)
+polygon(c(62, x_fill, 68), c(0, y_fill, 0), col = "lightgreen", border = NA)
+abline(v = c(62, 68), col = "red", lwd = 2, lty = 2)
+text(62, max(y) * 0.9, "x = 62", pos = 2, col = "red")
+text(68, max(y) * 0.9, "x = 68", pos = 4, col = "red")
+
+# Reset plotting parameters
+par(mfrow = c(1, 1))
+```
+
+------------------------------------------------------------------------
+
+## YOUR TURN: Test Scores
+
+**Context:** The scores on a standardized mathematics test are normally
+distributed with: - Mean (μ) = 500 - Standard deviation (σ) = 100
+
+Let X represent the score of a randomly selected student.
+
+### Question 1: P(X \< 650)
+
+Calculate the probability that a randomly selected student scores less
+than 650.
+
+```{r question1}
+# Calculate P(X < 650) when X ~ N(500, 100)
+prob_q1 <- pnorm(650, mean = 500, sd = 100)
+print(paste("P(X < 650) =", round(prob_q1, 4)))
+```
+
+**Your interpretation:** There is approximately a **93.32%** chance that
+a randomly selected student scores **less than** 650 on the test.
+
+### Question 2: P(X \> 650)
+
+Calculate the probability that a randomly selected student scores more
+than 650.
+
+```{r question2}
+# Calculate P(X > 650) when X ~ N(500, 100)
+# Method 1: lower.tail = FALSE
+prob_q2a <- pnorm(650, mean = 500, sd = 100, lower.tail = FALSE)
+# Method 2: complement
+prob_q2b <- 1 - pnorm(650, mean = 500, sd = 100)
+
+print(paste("P(X > 650) =", round(prob_q2a, 4)))
+print(paste("Verification:", round(prob_q2b, 4)))
+```
+
+**Your interpretation:** There is approximately a **6.68%** chance that
+a randomly selected student scores **more than** 650. Only a small
+fraction of students achieve this high score.
+
+### Question 3: P(450 \< X \< 650)
+
+Calculate the probability that a randomly selected student scores
+between 450 and 650.
+
+```{r question3}
+# Calculate P(450 < X < 650) when X ~ N(500, 100)
+prob_q3 <- pnorm(650, mean = 500, sd = 100) - pnorm(450, mean = 500, sd = 100)
+print(paste("P(450 < X < 650) =", round(prob_q3, 4)))
+```
+
+**Your interpretation:** There is approximately a **62.47%** chance that
+a randomly selected student scores between 450 and 650. This range spans
+from half a standard deviation below the mean to 1.5 standard deviations
+above it.
+
+### Question 4: Visualization
+
+Create a visualization showing the three probabilities you calculated
+above (similar to the example plots).
+
+```{r question4_visualization, fig.width=10, fig.height=8}
+# Set up plotting area for 3 plots
+par(mfrow = c(3, 1), mar = c(4, 4, 3, 2))
+
+# x range for test scores
+x_ts <- seq(200, 800, length.out = 1000)
+y_ts <- dnorm(x_ts, mean = 500, sd = 100)
+
+# Plot 1: P(X < 650)
+plot(x_ts, y_ts, type = "l", lwd = 2,
+     main = "P(X < 650)  — Test Scores N(500, 100)",
+     xlab = "Score", ylab = "Density",
+     xlim = c(200, 800))
+x_fill <- seq(200, 650, length.out = 1000)
+polygon(c(200, x_fill, 650), c(0, dnorm(x_fill, 500, 100), 0),
+        col = "lightblue", border = NA)
+abline(v = 650, col = "red", lwd = 2, lty = 2)
+text(650, max(y_ts) * 0.9, "x = 650", pos = 2, col = "red")
+
+# Plot 2: P(X > 650)
+plot(x_ts, y_ts, type = "l", lwd = 2,
+     main = "P(X > 650)  — Test Scores N(500, 100)",
+     xlab = "Score", ylab = "Density",
+     xlim = c(200, 800))
+x_fill <- seq(650, 800, length.out = 1000)
+polygon(c(650, x_fill, 800), c(0, dnorm(x_fill, 500, 100), 0),
+        col = "lightcoral", border = NA)
+abline(v = 650, col = "red", lwd = 2, lty = 2)
+text(650, max(y_ts) * 0.9, "x = 650", pos = 4, col = "red")
+
+# Plot 3: P(450 < X < 650)
+plot(x_ts, y_ts, type = "l", lwd = 2,
+     main = "P(450 < X < 650)  — Test Scores N(500, 100)",
+     xlab = "Score", ylab = "Density",
+     xlim = c(200, 800))
+x_fill <- seq(450, 650, length.out = 1000)
+polygon(c(450, x_fill, 650), c(0, dnorm(x_fill, 500, 100), 0),
+        col = "lightgreen", border = NA)
+abline(v = c(450, 650), col = "red", lwd = 2, lty = 2)
+text(450, max(y_ts) * 0.9, "x = 450", pos = 2, col = "red")
+text(650, max(y_ts) * 0.9, "x = 650", pos = 4, col = "red")
+
+# Reset
+par(mfrow = c(1, 1))
+```
+
+------------------------------------------------------------------------
+
+## Bonus Challenge
+
+Using the same test score distribution (μ = 500, σ = 100):
+
+1.  What score represents the 90th percentile? (Hint: use `qnorm()`)
+2.  What percentage of students score within 2 standard deviations of
+    the mean?
+
+```{r bonus}
+# 1. 90th percentile score
+p90 <- qnorm(0.90, mean = 500, sd = 100)
+cat("90th percentile score:", round(p90, 2), "\n")
+
+# 2. Percentage within 2 standard deviations (i.e., between 300 and 700)
+p_within_2sd <- pnorm(700, mean = 500, sd = 100) - pnorm(300, mean = 500, sd = 100)
+cat("Percentage within 2 SDs (300 to 700):", round(p_within_2sd * 100, 2), "%\n")
+```
+
+**Answers:**
+
+1. A student needs to score approximately **628.16** to be in the 90th
+percentile — meaning they scored higher than 90% of test-takers.
+
+2. Approximately **95.45%** of students score within 2 standard
+deviations of the mean (between 300 and 700). This is the well-known
+**95% rule** for the normal distribution.
+
+------------------------------------------------------------------------
+
+## Summary of R Functions for Normal Distribution
+
+| Function             | Purpose                         | Example               |
+|--------------------------|-----------------------|-----------------------|
+| `dnorm(x, mean, sd)` | Probability density at x        | `dnorm(65, 65, 3)`    |
+| `pnorm(q, mean, sd)` | Cumulative probability P(X ≤ q) | `pnorm(68, 65, 3)`    |
+| `qnorm(p, mean, sd)` | Quantile (inverse CDF)          | `qnorm(0.975, 65, 3)` |
+| `rnorm(n, mean, sd)` | Generate random samples         | `rnorm(100, 65, 3)`   |
+
+**Remember:** - For P(X \< b): use `pnorm(b, mean, sd)` - For P(X \> b):
+use `pnorm(b, mean, sd, lower.tail = FALSE)` or
+`1 - pnorm(b, mean, sd)` - For P(a \< X \< b): use
+`pnorm(b, mean, sd) - pnorm(a, mean, sd)`
+
+# Poisson Variables
+
+Suppose that the number of goals in a random Galway United football game
+has a Poisson distribution with, on average, 2 goals per game. Find the
+probability of
+
+1.  one goal in the next game,
+2.  at least one goal in the next game,
+3.  one goal in the next two games.
+4.  Now, calculate the probability that two goals will be scored in the
+    next game given that at least one goal will be scored.
+
+These can be got on paper, or using R if you wish
+
+```{r poisson_goals}
+lambda_per_game <- 2
+
+# 1. P(X = 1) for one game
+p_one_goal <- dpois(1, lambda = lambda_per_game)
+cat("1. P(exactly 1 goal in next game) =", p_one_goal, "\n")
+
+# 2. P(X >= 1) = 1 - P(X = 0)
+p_at_least_one <- 1 - dpois(0, lambda = lambda_per_game)
+cat("2. P(at least 1 goal in next game) =", p_at_least_one, "\n")
+
+# 3. One goal in the next TWO games
+# For two games, lambda = 2 * 2 = 4
+lambda_two_games <- 2 * lambda_per_game
+p_one_goal_two_games <- dpois(1, lambda = lambda_two_games)
+cat("3. P(exactly 1 goal in next two games) =", p_one_goal_two_games, "\n")
+
+# 4. P(X = 2 | X >= 1) = P(X = 2) / P(X >= 1)
+p_two_goals <- dpois(2, lambda = lambda_per_game)
+p_cond <- p_two_goals / p_at_least_one
+cat("4. P(X = 2 | X >= 1) =", p_cond, "\n")
+```
+
+**Solutions:**
+
+1. $P(X = 1) = e^{-2}\frac{2^1}{1!} \approx$ `r round(dpois(1,2), 4)` — about **27.07%** chance of exactly 1 goal.
+
+2. $P(X \ge 1) = 1 - P(X=0) = 1 - e^{-2} \approx$ `r round(1-dpois(0,2), 4)` — about **86.47%** chance of at least 1 goal.
+
+3. Over two games, goals follow $\text{Pois}(\lambda=4)$. $P(X=1) = e^{-4}\frac{4^1}{1!} \approx$ `r round(dpois(1,4), 4)` — about **7.33%** chance.
+
+4. $P(X=2 \mid X \ge 1) = \frac{P(X=2)}{P(X \ge 1)} \approx$ `r round(dpois(2,2)/(1-dpois(0,2)), 4)` — about **31.30%**.
+
+# Bayes' Theorem - Challenging
+
+Consider the following scenario. You have a disease that is present in
+1% of the human population. You have a test for the disease that is 95%
+accurate, meaning that 95% of the time a person with the disease will
+receive a positive test result, and 5% of the time they will receive a
+negative test result. Conversely, a person without the disease will
+receive a positive test result 5% of the time, and a negative test
+result 95% of the time. Translate the above problem formulation into
+probability statements (i.e. use $D$ for the event that the individual
+has the disease and $D^C$ for the event that they do not, $T$ for a
+positive test, $T^C$ for a negative test). Use Bayes rule to calculate
+the probability that a person with a positive test result has the
+disease (hint: you will need to apply the law of total probability to
+obtain $P(T)$). Does the result surprise you? Use `R` to plot the
+accuracy of the test against the probability that a person with a
+positive test result has the disease for accuracies of between 0% and
+100%.
+
+$P(D | T) = \frac{P(T|D)P(D)}{P(T)}$
+
+By law of total probability $P(T) = P(T \cap D) + P(T\cap D^c)$
+
+$P(T \cap D) = P(T|D)P(D)$
+
+They're all the hints I'm giving for now
+
+**Setting up the probability statements:**
+
+- $P(D) = 0.01$ (prevalence: 1% have the disease)
+- $P(D^C) = 0.99$
+- $P(T \mid D) = 0.95$ (sensitivity: true positive rate)
+- $P(T^C \mid D) = 0.05$ (false negative rate)
+- $P(T \mid D^C) = 0.05$ (false positive rate)
+- $P(T^C \mid D^C) = 0.95$ (specificity: true negative rate)
+
+**Applying the Law of Total Probability:**
+
+$$P(T) = P(T \mid D)P(D) + P(T \mid D^C)P(D^C)$$
+$$P(T) = (0.95)(0.01) + (0.05)(0.99) = 0.0095 + 0.0495 = 0.059$$
+
+**Bayes' Rule:**
+
+$$P(D \mid T) = \frac{P(T \mid D) \cdot P(D)}{P(T)} = \frac{0.95 \times 0.01}{0.059} \approx 0.161$$
+
+```{r bayes_theorem}
+# Given values
+P_D   <- 0.01   # P(Disease)
+P_T_given_D  <- 0.95  # P(Positive test | Disease) = sensitivity
+P_T_given_Dc <- 0.05  # P(Positive test | No disease) = false positive rate
+
+# Law of total probability for P(T)
+P_T <- P_T_given_D * P_D + P_T_given_Dc * (1 - P_D)
+cat("P(Positive test) =", P_T, "\n")
+
+# Bayes' Theorem
+P_D_given_T <- (P_T_given_D * P_D) / P_T
+cat("P(Disease | Positive test) =", round(P_D_given_T, 4), "\n")
+
+cat("\nSurprising? Even with a 95% accurate test, only about",
+    round(P_D_given_T * 100, 1), "% of people who test positive actually have the disease!\n")
+cat("This is because the disease is rare (1%), so false positives dominate.\n")
+```
+
+```{r bayes_plot}
+# Plot P(D|T) as a function of test accuracy (sensitivity = specificity = accuracy)
+accuracy <- seq(0.001, 0.999, length.out = 500)
+# Assume symmetric test: P(T|D) = accuracy, P(T|Dc) = 1 - accuracy
+
+bayes_prob <- function(acc, prev = 0.01) {
+  p_t <- acc * prev + (1 - acc) * (1 - prev)
+  (acc * prev) / p_t
+}
+
+p_disease_given_pos <- bayes_prob(accuracy)
+
+df_bayes <- data.frame(accuracy = accuracy * 100,
+                       prob_disease = p_disease_given_pos * 100)
+
+ggplot(df_bayes, aes(x = accuracy, y = prob_disease)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_vline(xintercept = 95, col = "red", linetype = "dashed") +
+  annotate("text", x = 95, y = 50,
+           label = paste0("95% accurate\n≈ ",
+                          round(bayes_prob(0.95) * 100, 1), "% of positives have disease"),
+           hjust = -0.05, color = "red", size = 3.5) +
+  labs(
+    x = "Test Accuracy (%)",
+    y = "P(Disease | Positive Test) (%)",
+    title = "Bayes' Theorem: Effect of Test Accuracy on PPV",
+    subtitle = "Disease prevalence = 1%"
+  ) +
+  theme_minimal()
+```
+
+**Does the result surprise you?** Yes — even with a 95% accurate test,
+only about **16.1%** of people who receive a positive result actually
+have the disease! This counterintuitive result is explained by the low
+prevalence (1%): most people in the population don't have the disease,
+so even with a 5% false positive rate, many false positives accumulate,
+swamping the true positives.
+
+# Conditional Probability
+
+1.  Given the events $A$ and $B$ and their probability $P(A) =
+    0.2$, $P(B) = 0.4$ and $P(A \cap B) = 0.1$, for each of the
+    following events, draw the probability diagram and shade the region
+    of interest and compute probability of the events.
+
+    -   $P(A\vert B)$
+    -   $P(B\vert A)$
+
+    Are events $A$ and $B$ independent?
+
+```{r conditional_probability}
+P_A       <- 0.2
+P_B       <- 0.4
+P_A_and_B <- 0.1
+
+# Conditional probabilities
+P_A_given_B <- P_A_and_B / P_B
+P_B_given_A <- P_A_and_B / P_A
+
+cat("P(A | B) =", P_A_given_B, "\n")
+cat("P(B | A) =", P_B_given_A, "\n")
+
+# Independence check: A and B are independent iff P(A ∩ B) = P(A) * P(B)
+cat("\nIndependence check:\n")
+cat("P(A) * P(B) =", P_A * P_B, "\n")
+cat("P(A ∩ B)   =", P_A_and_B, "\n")
+cat("Are A and B independent?", ifelse(P_A * P_B == P_A_and_B, "YES", "NO"), "\n")
+cat("Since", P_A * P_B, "≠", P_A_and_B, ", A and B are NOT independent.\n")
+```
+
+**Answers:**
+
+- $P(A \mid B) = \frac{P(A \cap B)}{P(B)} = \frac{0.1}{0.4} = 0.25$
+- $P(B \mid A) = \frac{P(A \cap B)}{P(A)} = \frac{0.1}{0.2} = 0.5$
+- **Independence:** $A$ and $B$ are **not independent** because $P(A) \times P(B) = 0.08 \ne 0.1 = P(A \cap B)$.
+
+2.  The probability of living in the outback, given that you have seen a
+    UFO is 0.4. The probability of living in the outback, given that you
+    have not seen a UFO is 0.2. Given that the probability of seeing a
+    UFO is 0.01, what is the probability of seeing a UFO, given that you
+    live in the outback?
+
+```{r ufo_bayes}
+# Let U = event of seeing a UFO, O = event of living in the outback
+P_U         <- 0.01   # P(UFO)
+P_O_given_U  <- 0.4   # P(Outback | UFO)
+P_O_given_Uc <- 0.2   # P(Outback | No UFO)
+
+# Law of total probability: P(O)
+P_O <- P_O_given_U * P_U + P_O_given_Uc * (1 - P_U)
+cat("P(Outback) =", P_O, "\n")
+
+# Bayes' Theorem: P(UFO | Outback)
+P_U_given_O <- (P_O_given_U * P_U) / P_O
+cat("P(UFO | Outback) =", round(P_U_given_O, 6), "\n")
+cat("Approximately", round(P_U_given_O * 100, 4), "%\n")
+```
+
+**Solution using Bayes' Theorem:**
+
+$$P(U \mid O) = \frac{P(O \mid U) \cdot P(U)}{P(O \mid U) \cdot P(U) + P(O \mid U^C) \cdot P(U^C)}$$
+
+$$= \frac{0.4 \times 0.01}{0.4 \times 0.01 + 0.2 \times 0.99} = \frac{0.004}{0.004 + 0.198} = \frac{0.004}{0.202} \approx 0.0198$$
+
+So if you live in the outback, there is approximately a **1.98%**
+chance you have seen a UFO — slightly higher than the base rate of 1%,
+since outback dwellers are more likely to report UFO sightings.

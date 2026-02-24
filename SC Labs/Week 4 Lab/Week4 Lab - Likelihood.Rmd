@@ -1,0 +1,608 @@
+---
+title: "Week 4 Lab: Likelihood"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+------------------------------------------------------------------------
+
+# Introduction
+
+In statistics, the **likelihood function** is one of our most powerful tools for estimating unknown parameters. Given a model and some observed data, the likelihood tells us: *how probable is this data, as a function of the unknown parameter?*
+
+Formally, if we observe data $x_1, x_2, \ldots, x_n$ from a distribution with density (or mass function) $f(x \mid \theta)$, the **likelihood** is:
+
+$$
+L(\theta) = \prod_{i=1}^n f(x_i \mid \theta)
+$$
+
+Because products of many small numbers become numerically unstable, we almost always work with the **log-likelihood**:
+
+$$
+\ell(\theta) = \sum_{i=1}^n \log f(x_i \mid \theta)
+$$
+
+The **maximum likelihood estimate (MLE)** $\hat{\theta}$ is the value of $\theta$ that maximises $\ell(\theta)$.
+
+------------------------------------------------------------------------
+
+# 1. Computing and Plotting Log-Likelihoods
+
+Most density functions in R start with the letter `d` (e.g. `dpois`, `dnorm`, `dbinom`). They all accept a `log = TRUE` argument that returns the log-density directly, making it easy to compute log-likelihoods.
+
+## Worked Example: Horse Kick Data
+
+The classic horse kick dataset records the number of deaths by horse kick per year in 14 Prussian cavalry corps over 20 years (200 observations total). A Poisson model is a natural choice since we are counting rare events.
+
+If $X_i \sim \text{Poisson}(\lambda)$, the log-likelihood is:
+
+$$
+\ell(\lambda) = \sum_{i=1}^n \left[ x_i \log(\lambda) - \lambda - \log(x_i!) \right]
+$$
+
+```{r horse-kick}
+x <- rep(0:4, c(109, 65, 22, 3, 1))  ## Horse kick data: value repeated by frequency
+
+# Define the log-likelihood as a function of lambda
+loglik <- function(lambda) sum(dpois(x, lambda, log = TRUE))
+
+# Plot the log-likelihood over a range of lambda values
+curve(Vectorize(loglik)(x), from = 0.1, to = 2,
+      xlab = expression(lambda),
+      ylab = expression(ell(lambda)),
+      main = "Log-likelihood for Horse Kick Data (Poisson)",
+      col = "steelblue", lwd = 2)
+
+# Add a vertical line at the sample mean (which is the MLE for Poisson)
+abline(v = mean(x), col = "tomato", lty = 2, lwd = 2)
+legend("topright", legend = c("Log-likelihood", expression(hat(lambda) == bar(x))),
+       col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
+```
+
+> **Note:** For the Poisson distribution, it can be shown analytically that the MLE is $\hat{\lambda} = \bar{x}$, the sample mean. You can see this corresponds to the peak of the log-likelihood curve above.
+
+------------------------------------------------------------------------
+
+## (a) Birth Weight of Infants of Smokers
+
+The `birthwt` dataset from the `MASS` package contains birth weight data from a study at a Massachusetts hospital. We will model the birth weights (in kg) of infants born to **smokers** using a Normal distribution, assuming the standard deviation is known: $\sigma = 1$.
+
+If $X_i \sim N(\mu, 1)$, the log-likelihood as a function of $\mu$ is:
+
+$$
+\ell(\mu) = \sum_{i=1}^n \log \phi\left(\frac{x_i - \mu}{1}\right) = -\frac{n}{2}\log(2\pi) - \frac{1}{2}\sum_{i=1}^n (x_i - \mu)^2
+$$
+
+```{r birthwt-data}
+birthwt <- read.csv("birthwt.csv")
+
+# Extract birth weights (in grams) for smoking mothers and convert to kg
+bwt_smokers <- birthwt$bwt[birthwt$smoke == "yes"] / 1000
+
+cat("Number of observations:", length(bwt_smokers), "\n")
+cat("Sample mean:", round(mean(bwt_smokers), 3), "kg\n")
+hist(bwt_smokers, breaks = 15, col = "lightblue", border = "white",
+     main = "Birth Weights of Infants (Smokers)",
+     xlab = "Birth weight (kg)")
+```
+
+**Your turn:** Write a function `loglik_mu` that computes the log-likelihood as a function of `mu`, assuming `sd = 1`. Then plot it over a sensible range of `mu` values, and add a vertical line at the sample mean.
+
+```{r bwt-loglik}
+## Write your log-likelihood function here
+loglik_mu <- function(mu) {
+  sum(dnorm(bwt_smokers, mean = mu, sd = 1, log = TRUE))
+}
+
+## Plot the log-likelihood
+curve(Vectorize(loglik_mu)(x), from = 1, to = 5,
+      xlab = expression(mu), ylab = expression(ell(mu)),
+      main = "Log-likelihood for Birth Weight (Normal, sd=1)",
+      col = "steelblue", lwd = 2)
+
+## Add a vertical line at the sample mean (the theoretical MLE)
+abline(v = mean(bwt_smokers), col = "tomato", lty = 2, lwd = 2)
+legend("topright", legend = c("Log-likelihood", expression(hat(mu) == bar(x))),
+       col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
+```
+
+> **Think about it:** For a Normal distribution with known $\sigma$, what is the MLE for $\mu$? Does your plot confirm this?
+
+------------------------------------------------------------------------
+
+## (b) Seed Germination Data
+
+The following data are the number of seeds germinating out of 20 seeds, across 5 independent batches. We model each batch as $Y_i \sim \text{Binomial}(20, p)$ where $p$ is the unknown germination probability.
+
+```{r seed-data, echo=FALSE, eval=TRUE}
+set.seed(12345)
+y <- rbinom(5, 20, p = 0.65)
+print(y)
+```
+
+The log-likelihood for $p$ is:
+
+$$
+\ell(p) = \sum_{i=1}^n \left[ \log \binom{20}{y_i} + y_i \log(p) + (20 - y_i)\log(1-p) \right]
+$$
+
+**Your turn:** Write a function `loglik_p` that computes the log-likelihood as a function of `p`. Plot it over $p \in (0, 1)$.
+
+```{r seed-loglik}
+## Write your log-likelihood function here
+loglik_p <- function(p) {
+  sum(dbinom(y, 20, prob = p, log = TRUE))
+}
+
+## Plot the log-likelihood
+curve(Vectorize(loglik_p)(x), from = 0.01, to = 0.99,
+      xlab = "p", ylab = expression(ell(p)),
+      main = "Log-likelihood for Germination Probability (Binomial)",
+      col = "steelblue", lwd = 2)
+
+## Add vertical line at the MLE: p_hat = mean(y) / 20
+abline(v = mean(y) / 20, col = "tomato", lty = 2, lwd = 2)
+legend("topright", legend = c("Log-likelihood", expression(hat(p) == bar(y)/20)),
+       col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
+```
+
+> **Think about it:** The MLE for a Binomial probability is $\hat{p} = \bar{y}/n$ where $n$ is the number of trials. What value does that give here? Add it as a vertical line to your plot to check.
+
+------------------------------------------------------------------------
+
+## (c) Extension: Exponential Waiting Times *(optional challenge)*
+
+Suppose we observe the following waiting times (in minutes) between events:
+
+```{r waiting-times}
+set.seed(99)
+w <- rexp(30, rate = 0.4)
+round(w, 2)
+```
+
+The Exponential distribution has density $f(x \mid \lambda) = \lambda e^{-\lambda x}$ for $x > 0$, where $\lambda$ is the rate parameter.
+
+**Your turn:** Write a log-likelihood function for $\lambda$ and plot it. What is the analytical MLE for $\lambda$ under an Exponential model?
+
+```{r exp-loglik}
+## Write your log-likelihood function here
+loglik_rate <- function(lambda) {
+  sum(dexp(w, rate = lambda, log = TRUE))
+}
+
+## Plot the log-likelihood
+curve(Vectorize(loglik_rate)(x), from = 0.1, to = 1,
+      xlab = expression(lambda), ylab = expression(ell(lambda)),
+      main = "Log-likelihood for Exponential Waiting Times",
+      col = "steelblue", lwd = 2)
+
+## The MLE for the Exponential rate is 1/mean(w)
+abline(v = 1 / mean(w), col = "tomato", lty = 2, lwd = 2)
+legend("topright", legend = c("Log-likelihood", expression(hat(lambda) == 1/bar(w))),
+       col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
+```
+
+------------------------------------------------------------------------
+
+# 2. Interlude: Likelihood Surfaces
+
+So far we have only considered models with a single unknown parameter. When there are two unknown parameters, the log-likelihood becomes a **surface** over a 2D parameter space.
+
+For example, if $X_i \sim N(\mu, \sigma^2)$ with both $\mu$ and $\sigma$ unknown, the log-likelihood is:
+
+$$
+\ell(\mu, \sigma) = -n\log(\sigma) - \frac{1}{2\sigma^2}\sum_{i=1}^n (x_i - \mu)^2 + \text{const}
+$$
+
+Here is an example using the full `birthwt` smoker data, treating both $\mu$ and $\sigma$ as unknown:
+
+```{r likelihood-surface, fig.width=7, fig.height=5}
+loglik_2d <- function(mu, sigma) {
+  if (sigma <= 0) return(-Inf)
+  sum(dnorm(bwt_smokers, mean = mu, sd = sigma, log = TRUE))
+}
+
+mu_vals    <- seq(2.5, 3.5, length.out = 100)
+sigma_vals <- seq(0.4, 1.2, length.out = 100)
+
+ll_surface <- outer(mu_vals, sigma_vals, Vectorize(loglik_2d))
+
+filled.contour(mu_vals, sigma_vals, ll_surface,
+               xlab = expression(mu), ylab = expression(sigma),
+               main = "Log-likelihood Surface: Normal(μ, σ)",
+               color.palette = function(n) hcl.colors(n, "YlOrRd", rev = TRUE))
+```
+
+> **Observe:** The MLE occurs at the peak (darkest region). The elongated shape of the contours tells us something about how $\mu$ and $\sigma$ are related in terms of their uncertainty — this is the beginning of the idea of **confidence regions**.
+
+------------------------------------------------------------------------
+
+# 3. Fun with Derivatives
+
+Finding the MLE analytically means taking the derivative of $\ell(\theta)$ with respect to $\theta$ and setting it to zero. R can compute symbolic derivatives using the `D()` function, which takes an `expression()` and the name of the variable to differentiate with respect to.
+
+## Worked Example
+
+```{r deriv-example}
+# Derivative of log(t) with respect to t
+D(expression(log(t)), "t")
+
+# Derivative of t^3 - 2*t with respect to t
+D(expression(t^3 - 2*t), "t")
+```
+
+**Your turn:** Use `D()` to find the derivative of each of the following with respect to $t$.
+
+------------------------------------------------------------------------
+
+## (a) $a + bt + ct^2$
+
+```{r deriv-a}
+## Find the derivative with respect to t
+D(expression(a + b*t + c*t^2), "t")
+```
+
+> What type of function is the derivative? What does this tell you about the shape of the original function?
+
+------------------------------------------------------------------------
+
+## (b) $e^{t^2}$
+
+```{r deriv-b}
+## Find the derivative with respect to t
+D(expression(exp(t^2)), "t")
+```
+
+------------------------------------------------------------------------
+
+## (c) $t - \log(t)$
+
+```{r deriv-c}
+## Find the derivative with respect to t
+D(expression(t - log(t)), "t")
+```
+
+> Set the derivative equal to zero and solve for $t$. What is the minimum of $t - \log(t)$?
+
+```{r}
+ddt <- function(t) eval(expression(1-1/t))
+uniroot(ddt, interval = c(0.01, 10))$root
+```
+
+The minimum of $t - \log(t)$ is when $t=1$, the above is using numerical methods and so has some "rounding" error
+
+------------------------------------------------------------------------
+
+## (d) Extension: The Poisson Log-Likelihood *(optional)*
+
+The Poisson log-likelihood (ignoring constants) is $\ell(\lambda) = \bar{x} \cdot n \cdot \log(\lambda) - n\lambda$.
+
+**Your turn:** Use `D()` (or by hand) to differentiate with respect to $\lambda$, set the result to zero, and confirm that $\hat{\lambda} = \bar{x}$.
+
+```{r deriv-d}
+## Differentiate the Poisson log-likelihood with respect to lambda
+# Treat n and xbar as constants
+ploglikD <- D(expression(xbar * n * log(lambda) - n * lambda), "lambda")
+ploglikD
+```
+
+Uniroot will not solve for in general, so n and xbar would need to be set as numbers to solve this, but you should be able to solve this one by hand (I did it in lectures)
+
+$\frac{n\bar{x}}{\lambda} - n = 0$
+
+------------------------------------------------------------------------
+
+# 4. Numerical Maximum Likelihood with `mle()`
+
+While analytical MLEs are elegant, many realistic models don't have closed-form solutions. R's `mle()` function (from the `stats4` package) finds the MLE **numerically** by minimising the **negative** log-likelihood (equivalently, maximising the log-likelihood).
+
+## Key things `mle()` needs:
+
+-   A function computing the **negative** log-likelihood
+-   A `start` list: initial guesses for the parameters
+-   `nobs`: the number of observations (used for information criteria like AIC/BIC)
+
+```{r load-stats4}
+library(stats4)
+```
+
+## Worked Example: Horse Kick Data
+
+```{r mle-poisson}
+x <- rep(0:4, c(109, 65, 22, 3, 1))
+
+negloglik_pois <- function(lambda) -sum(dpois(x, lambda, log = TRUE))
+
+fit_pois <- mle(negloglik_pois, start = list(lambda = 1), nobs = length(x))
+summary(fit_pois)
+```
+
+> **Reading the output:** The `Estimate` is the MLE $\hat{\lambda}$, and the `Std. Error` is the estimated standard error, derived from the curvature of the log-likelihood at its peak. Notice that the MLE matches $\bar{x}$ = `r round(mean(x), 4)`.
+
+## Convergence and details
+
+When you call mle(), the fitted object stores a lot of additional information beyond just the estimate and standard error. You can access this with [fit\@details], which returns the full output from the underlying optim() call. The most important thing to check here is fit\@details\$convergence — this is a numeric code where 0 means the algorithm converged successfully. Any non-zero value indicates a problem: for example, 1 means the iteration limit was hit before convergence, and 52 or 54 typically indicate numerical issues with the likelihood evaluation. It is good practice to always check this after fitting, because mle() will not throw an error or warning if the optimiser fails to converge — it will simply return whatever value of the parameter it ended up at, which may be nowhere near the true MLE. A model that hasn't converged can look perfectly reasonable on the surface, so fit\@details\$convergence == 0 is your first sanity check before trusting any estimates.
+
+```{r}
+fit_pois@details
+```
+
+------------------------------------------------------------------------
+
+## (a) MLE for Birth Weight (Normal, sd = 1)
+
+**Your turn:** Using the `loglik_mu` function you wrote in Question 1(a), compute the MLE for $\mu$. Remember to negate it.
+
+```{r mle-normal}
+## Define the negative log-likelihood
+negloglik_mu <- function(mu) -loglik_mu(mu)
+
+## Fit the model
+fit_mu <- mle(negloglik_mu, start = list(mu = 3), nobs = length(bwt_smokers))
+summary(fit_mu)
+fit_mu@details
+```
+
+> Does the MLE match the sample mean? Is this what you expected? Did it converge?
+
+------------------------------------------------------------------------
+
+## (b) MLE for Seed Germination (Binomial)
+
+**Your turn:** Using the `loglik_p` function you wrote in Question 1(b), compute the MLE for `p`. You will need to constrain $p \in (0, 1)$ using the `method` and `lower`/`upper` arguments.
+
+```{r mle-binomial}
+## Define the negative log-likelihood
+negloglik_p <- function(p) -loglik_p(p)
+
+## Fit the model — use method="Brent" for single-parameter bounded optimisation
+fit_p <- mle(negloglik_p, start = list(p = 0.5), nobs = length(y),
+             method = "Brent", lower = 0.001, upper = 0.999)
+summary(fit_p)
+
+## Compare to analytic MLE
+cat("Analytic MLE p_hat = sum(y) / (5*20) =", sum(y) / (5 * 20), "\n")
+```
+
+> Compare the MLE to $\sum y_i / (5 \times 20)$. Do they agree?
+
+------------------------------------------------------------------------
+
+## (c) MLE for Birth Weight, sd unknown
+
+So far in Question 4(a) you fixed sd = 1 and only estimated μ. In reality we don't know σ either, so let's estimate both parameters simultaneously using mle(). This means our negative log-likelihood now takes two arguments, and mle() will search over a 2D parameter space — exactly the surface you visualised in Section 2.
+
+```{r mle-both}
+negloglik_both <- function(mu, sigma) {
+  if (sigma <= 0) return(Inf)
+  -sum(dnorm(bwt_smokers, mean = mu, sd = sigma, log = TRUE))
+}
+
+fit_both <- mle(negloglik_both, start = list(mu = 3, sigma = 0.7),
+                nobs = length(bwt_smokers))
+summary(fit_both)
+fit_both@details$convergence
+
+cat("Sample mean:", round(mean(bwt_smokers), 4), "\n")
+cat("Sample sd:  ", round(sd(bwt_smokers), 4), "\n")
+```
+
+You should notice a slight differnce between $\sigma$ estimated from MLE and the sample SD. Due to Bessel's correction as mentioned in the lecture
+
+------------------------------------------------------------------------
+
+# 5. Optimisation Methods
+
+So far, `mle()` has been doing the hard work for us. Under the hood, it calls R's general-purpose `optim()` function, which supports several different numerical optimisation algorithms. Understanding these methods — and their trade-offs — is important when likelihood surfaces are irregular or high-dimensional.
+
+All of these algorithms are trying to solve the same problem: find the value of $\theta$ that minimises (or maximises) some objective function $f(\theta)$. They differ in *how* they use information about $f$ to navigate the parameter space.
+
+## Overview of Key Methods
+
+**Nelder-Mead** is the default method in `optim()`. It is a *derivative-free* method that works by maintaining a geometric shape (a "simplex") in parameter space and iteratively reflecting, expanding, or contracting it toward the optimum. Because it does not require any gradient information it is robust and easy to use, but can be slow to converge and may struggle in high dimensions.
+
+**BFGS** (Broyden–Fletcher–Goldfarb–Shanno) is a *quasi-Newton* method. Newton's method uses both the gradient (first derivative) and the Hessian (second derivative matrix) to take well-informed steps toward the optimum. BFGS approximates the Hessian from successive gradient evaluations, avoiding the cost of computing it exactly. It is generally much faster than Nelder-Mead when the log-likelihood is smooth.
+
+**Gradient Ascent** is the simplest iterative method. At each step we move in the direction of the gradient by a fixed step size $\gamma$ (the *learning rate*):
+
+$$
+\theta^{(t+1)} = \theta^{(t)} + \gamma \cdot \frac{\partial \ell}{\partial \theta}\bigg|_{\theta^{(t)}}
+$$
+
+It is intuitive and easy to implement by hand, but it is sensitive to the choice of $\gamma$ and can be slow near flat regions of the likelihood.
+
+## MLE
+
+Note that mle() uses BFGS (or its memory-efficient variant L-BFGS-B, which is used when parameter bounds are supplied) under the hood by default — so when you called mle() in Section 4, you were already using a quasi-Newton method without knowing it. It is instructive to try the other methods directly using optim() and compare their behaviour.
+
+## Worked Example: Comparing Methods on the Horse Kick Data
+
+Here we compare Nelder-Mead and BFGS using `optim()` directly, then implement gradient ascent by hand.
+
+```{r optim-compare}
+x <- rep(0:4, c(109, 65, 22, 3, 1))
+negloglik_pois <- function(lambda) -sum(dpois(x, lambda, log = TRUE))
+
+# Nelder-Mead (derivative-free)
+fit_nm   <- optim(par = 1, fn = negloglik_pois, method = "Nelder-Mead")
+
+# BFGS (quasi-Newton, uses gradient)
+fit_bfgs <- optim(par = 1, fn = negloglik_pois, method = "BFGS")
+
+cat("Nelder-Mead estimate:", round(fit_nm$par, 6),   "  Iterations:", fit_nm$counts[1], "\n")
+cat("BFGS estimate:       ", round(fit_bfgs$par, 6), "  Iterations:", fit_bfgs$counts[1], "\n")
+cat("True MLE (mean x):   ", round(mean(x), 6), "\n")
+```
+
+```{r gradient-ascent-poisson}
+# Gradient ascent by hand for the Poisson log-likelihood.
+# The derivative of ell(lambda) with respect to lambda is: sum(x)/lambda - n
+grad_loglik_pois <- function(lambda) sum(x) / lambda - length(x)
+
+gamma  <- 0.001  # learning rate
+lambda <- 0.5    # starting value
+n_iter <- 500
+
+trace <- numeric(n_iter)
+for (i in seq_len(n_iter)) {
+  lambda   <- lambda + gamma * grad_loglik_pois(lambda)
+  trace[i] <- lambda
+}
+
+plot(trace, type = "l", col = "steelblue", lwd = 2,
+     xlab = "Iteration", ylab = expression(lambda),
+     main = "Gradient Ascent: Poisson MLE")
+abline(h = mean(x), col = "tomato", lty = 2, lwd = 2)
+legend("bottomright", legend = c("Gradient ascent", expression(hat(lambda) == bar(x))),
+       col = c("steelblue", "tomato"), lty = 1:2, lwd = 2)
+
+cat("Gradient ascent estimate after", n_iter, "iterations:", round(lambda, 6), "\n")
+```
+
+> **Observe:** Gradient ascent converges to the correct answer but requires many more iterations than BFGS. Try changing the learning rate to `0.01` or `0.0001` and see what happens.
+
+## Birthwt
+
+Your turn: Using the bwt_smokers data from Question 1(a), fit the Normal log-likelihood (with sd = 1) using optim() with each of the three methods: "Nelder-Mead", "BFGS", and "L-BFGS-B". For "L-BFGS-B" you will need to supply a lower bound since μ must be positive for birth weights. Compare the estimates, the number of function evaluations ( counts), and the convergence codes (convergence) across the three methods. Which converges fastest? Do they all agree on the estimate?
+
+```{r optim-birthwt}
+negloglik_mu <- function(mu) -loglik_mu(mu)
+
+# Nelder-Mead (derivative-free)
+fit_nm_bwt   <- optim(par = 3, fn = negloglik_mu, method = "Nelder-Mead")
+
+# BFGS (quasi-Newton)
+fit_bfgs_bwt <- optim(par = 3, fn = negloglik_mu, method = "BFGS")
+
+# L-BFGS-B (bounded quasi-Newton, mu must be positive)
+fit_lbfgsb_bwt <- optim(par = 3, fn = negloglik_mu, method = "L-BFGS-B", lower = 0)
+
+cat("Nelder-Mead  estimate:", round(fit_nm_bwt$par, 6),
+    "  Fn evals:", fit_nm_bwt$counts[1],
+    "  Convergence:", fit_nm_bwt$convergence, "\n")
+cat("BFGS         estimate:", round(fit_bfgs_bwt$par, 6),
+    "  Fn evals:", fit_bfgs_bwt$counts[1],
+    "  Convergence:", fit_bfgs_bwt$convergence, "\n")
+cat("L-BFGS-B     estimate:", round(fit_lbfgsb_bwt$par, 6),
+    "  Fn evals:", fit_lbfgsb_bwt$counts[1],
+    "  Convergence:", fit_lbfgsb_bwt$convergence, "\n")
+cat("Sample mean (true MLE):", round(mean(bwt_smokers), 6), "\n")
+```
+
+------------------------------------------------------------------------
+
+# 6. MLE for the Gamma Distribution via Gradient Ascent
+
+The Gamma distribution is commonly used to model positive, right-skewed data such as waiting times, rainfall totals, and insurance claims. Its density is:
+
+$$
+f(x \mid \alpha, \beta) = \frac{\beta^\alpha}{\Gamma(\alpha)} x^{\alpha - 1} e^{-\beta x}, \quad x > 0
+$$
+
+where $\alpha > 0$ is the **shape** parameter and $\beta > 0$ is the **rate** parameter. The shape parameter $\alpha$ does not have a closed-form MLE — this is a case where numerical methods are essential.
+
+The log-likelihood for $\alpha$ alone (with $\beta$ replaced by its MLE $\hat{\beta} = \alpha / \bar{x}$, which *does* have a closed form) simplifies so that its derivative is:
+
+$$
+\frac{\partial \ell(\alpha)}{\partial \alpha} = n\log\alpha - n\log\bar{x} - n\frac{\partial}{\partial\alpha}\log\Gamma(\alpha) + \sum_{i=1}^n \log(x_i)
+$$
+
+R provides `digamma(alpha)` to evaluate $\frac{\partial}{\partial\alpha}\log\Gamma(\alpha)$.
+
+Our observed sample is:
+
+```{r gamma-data}
+x_gamma <- c(67.98, 61, 49.82)
+cat("Sample:", x_gamma, "\n")
+cat("Sample mean:", round(mean(x_gamma), 4), "\n")
+cat("Sum of log(x):", round(sum(log(x_gamma)), 4), "\n")
+```
+
+**Your turn:** Write a function `grad_gamma` that computes $\frac{\partial \ell(\alpha)}{\partial \alpha}$ for a given value of `alpha`. Then implement gradient ascent with learning rate $\gamma = 0.1$ to find the MLE $\hat{\alpha}$.
+
+```{r gamma-gradient-ascent}
+gradient <- function(alpha, sample) {
+  n       <- length(sample)
+  barx    <- mean(sample)
+  sum_log <- sum(log(sample))
+  grad    <- n * log(alpha) - n * log(barx) - n * digamma(alpha) + sum_log
+  return(grad)
+}
+
+grad_ascent_gamma <- function(sample, initial = 5, step = 0.01, max_iter = 5000) {
+  alpha <- initial
+  trace <- numeric(max_iter)
+  for (i in seq_len(max_iter)) {
+    new_alpha <- alpha + step * gradient(alpha, sample)
+    trace[i]  <- new_alpha
+    if (abs(new_alpha - alpha) < 1e-8) {
+      trace <- trace[1:i]
+      break
+    }
+    alpha <- new_alpha
+  }
+  list(alpha = alpha, trace = trace)
+}
+
+result <- grad_ascent_gamma(x_gamma, initial = 5, step = 0.1)
+cat("Gradient ascent MLE for alpha:", round(result$alpha, 6), "\n")
+
+plot(result$trace, type = "l", col = "steelblue", lwd = 2,
+     xlab = "Iteration", ylab = expression(alpha),
+     main = "Gradient Ascent: Gamma Shape MLE")
+abline(h = result$alpha, col = "tomato", lty = 2, lwd = 2)
+```
+
+> **Hint:** A reasonable starting value might be $\alpha = 1$ or $\alpha = 5$. If your trace looks unstable, try reducing the learning rate.
+
+```{r gamma-mle-verify}
+negloglik_gamma <- function(alpha, beta) {
+  if (alpha <= 0 || beta <= 0) return(Inf)
+  -sum(dgamma(x_gamma, shape = alpha, scale = beta, log = TRUE))
+}
+
+fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
+                 nobs = length(x_gamma))
+```
+
+**Your turn (extension):** Verify your gradient ascent answer using `mle()`. dgamma will give the usual way of getting the log-likelihood
+
+```{r gamma-optim-verify}
+# negloglik_gamma <- function(alpha, beta) {
+#   -sum(dgamma( log = TRUE))
+# }
+```
+
+Now let's do the fit
+
+```{r gamma-mle-fit}
+fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
+                 nobs = length(x_gamma))
+summary(fit_gamma)
+```
+
+Does it converge? Check
+
+```{r gamma-convergence-check}
+fit_gamma@details$convergence
+cat("Convergence code 0 = success, non-zero = problem.\n")
+```
+
+We might need to keep going until it converges - fill in the missing below
+
+```{r gamma-convergence-loop}
+while (fit_gamma@details$convergence != 0) {
+  fit_gamma <- mle(negloglik_gamma, start = as.list(coef(fit_gamma)),
+                   nobs = length(x_gamma))
+}
+cat("Final convergence code:", fit_gamma@details$convergence, "\n")
+summary(fit_gamma)
+```

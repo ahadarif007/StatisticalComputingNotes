@@ -1,0 +1,470 @@
+---
+title: "Week 3 Lab - Statistical Tests"
+author: "Student"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# 1. Some Distributions (Quick Warm-Up)
+
+Visualise a few common distributions to warm up.
+
+## Poisson Distribution
+
+```{r poisson}
+# Poisson with mean (lambda) = 5
+barplot(dpois(0:15, 5), names.arg = 0:15,
+        main = "Poisson Distribution (lambda = 5)",
+        xlab = "x", ylab = "P(X = x)", col = "steelblue")
+
+# Poisson with mean (lambda) = 12
+barplot(dpois(0:30, 12), names.arg = 0:30,
+        main = "Poisson Distribution (lambda = 12)",
+        xlab = "x", ylab = "P(X = x)", col = "tomato")
+```
+
+## Normal Distribution
+
+```{r normal}
+x <- seq(-4, 4, length.out = 300)
+plot(x, dnorm(x, mean = 0, sd = 1), type = "l", lwd = 2, col = "darkgreen",
+     main = "Standard Normal Distribution",
+     xlab = "x", ylab = "Density")
+```
+
+## Gamma Distribution
+
+```{r gamma}
+x <- seq(0, 20, length.out = 300)
+plot(x, dgamma(x, shape = 2, rate = 1), type = "l", lwd = 2, col = "purple",
+     main = "Gamma Distribution (shape = 2, rate = 1)",
+     xlab = "x", ylab = "Density")
+```
+
+## Chi-Squared Distribution
+
+```{r chisq-dist}
+x <- seq(0, 20, length.out = 300)
+plot(x, dchisq(x, df = 5), type = "l", lwd = 2, col = "darkorange",
+     main = "Chi-Squared Distribution (df = 5)",
+     xlab = "x", ylab = "Density")
+```
+
+---
+
+# 2. Hypothesis Testing
+
+When performing hypothesis tests we always:
+
+1. State the null hypothesis $H_0$ and alternative hypothesis $H_1$.  
+2. State the significance level $\alpha$ (usually 0.05).  
+3. Check assumptions (normality, equal variances, independence, etc.).  
+4. Choose the appropriate test (parametric or non-parametric).  
+5. Compute the test statistic and p-value.  
+6. Make a conclusion — **reject** or **fail to reject** $H_0$ — and interpret the result in plain English.
+
+*Nothing to show computationally in this section — see sections 3–5 for worked examples.*
+
+---
+
+# 3. Smaller Tests
+
+## 3.1 Study Time Before and After Intervention
+
+**Question:** A study-skills workshop claims to improve student study habits. Ten students recorded their weekly study hours before and after the workshop. Is there evidence that the workshop increased study time?
+
+Let $\mu_1$ = mean hours **before** and $\mu_2$ = mean hours **after**.
+
+$$H_0: \mu_1 \geq \mu_2 \quad \text{(workshop made no improvement)}$$
+$$H_1: \mu_1 < \mu_2 \quad \text{(workshop improved study time)}$$
+$$\alpha = 0.05$$
+
+This is **paired** data (same students measured twice), so we first check whether the **differences** are approximately normal.
+
+```{r before-after}
+before <- c(12, 15, 10, 18, 14, 11, 16, 13, 17, 12)
+after  <- c(15, 18, 13, 20, 16, 14, 18, 15, 19, 14)
+
+diff <- before - after
+
+# Check normality of differences
+qqnorm(diff, main = "Q-Q Plot of Differences (Before - After)")
+qqline(diff, col = "red")
+shapiro.test(diff)
+```
+
+The differences do not appear strongly non-normal, but since the sample is small (n = 10) and the Q-Q plot shows some deviation, we use the **Wilcoxon signed-rank test** (non-parametric paired test) to be safe.
+
+```{r before-after-test}
+wilcox.test(before, after, alternative = "less", paired = TRUE)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the workshop significantly increased study time.
+
+---
+
+## 3.2 Mobile-Phone Usage
+
+**Question:** Mobile-phone usage is claimed to exceed 5 hours per week on average. Data from 26 students is provided. Test at $\alpha = 0.05$.
+
+$$H_0: \mu \leq 5$$
+$$H_1: \mu > 5$$
+
+```{r mobile-phone}
+x <- c(6, 4, 8, 7, 5, 6, 9, 3, 5, 7, 4, 6, 8, 5, 7,
+       6, 4, 9, 5, 8, 3, 6, 5, 7, 6, 8)
+
+# Check normality
+qqnorm(x, main = "Q-Q Plot of Mobile Phone Usage")
+qqline(x, col = "red")
+shapiro.test(x)
+```
+
+The data is not normally distributed, so we use the **Wilcoxon signed-rank test** (one-sample, non-parametric).
+
+```{r mobile-phone-test}
+wilcox.test(x, mu = 5, alternative = "greater")
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude average usage is significantly greater than 5 hours.
+
+---
+
+## 3.3 Compare Schools
+
+**Question:** Compare exam scores from two schools (A and B). Is there a significant difference in mean scores?
+
+$$H_0: \mu_A = \mu_B$$
+$$H_1: \mu_A \neq \mu_B$$
+$$\alpha = 0.05$$
+
+```{r compare-schools}
+school_A <- c(78, 85, 90, 76, 82, 79, 88, 91, 85, 80, 83, 87, 92, 84, 81)
+school_B <- c(82, 88, 84, 79, 85, 83, 87, 90, 86, 81, 85, 89, 91, 87, 83)
+
+# Check normality
+shapiro.test(school_A)
+shapiro.test(school_B)
+
+# Boxplot for a visual comparison
+boxplot(school_A, school_B,
+        names = c("School A", "School B"),
+        col = c("lightblue", "salmon"),
+        main = "Exam Scores by School",
+        ylab = "Score")
+```
+
+Both groups appear normally distributed. We also assume equal variances (both groups have similar spreads), so we use an **independent two-sample t-test**.
+
+```{r compare-schools-test}
+t.test(school_A, school_B, var.equal = TRUE)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference in mean scores between the two schools.
+
+---
+
+## 3.4 Placebo vs Drug
+
+**Question:** A drug is claimed to lower blood pressure more than a placebo. Test whether the drug group has a significantly greater reduction in blood pressure.
+
+$$H_0: \mu_{\text{drug}} \leq \mu_{\text{placebo}}$$
+$$H_1: \mu_{\text{drug}} > \mu_{\text{placebo}}$$
+$$\alpha = 0.05$$
+
+```{r drug-placebo}
+drug_group    <- c(8.1, 7.6, 8.9, 9.2, 7.8, 8.3, 9.1, 8.7, 9.0, 8.5, 8.6, 9.3)
+placebo_group <- c(4.5, 10.2, 3.8, 12.1, 4.0, 11.3, 3.9, 10.8, 5.2, 9.7)
+
+# Check normality
+shapiro.test(drug_group)
+shapiro.test(placebo_group)
+
+# Check variances visually
+boxplot(drug_group, placebo_group,
+        names = c("Drug", "Placebo"),
+        col = c("lightgreen", "lightyellow"),
+        main = "Blood Pressure Reduction",
+        ylab = "Reduction (mmHg)")
+```
+
+Normality holds for both groups. However, the boxplot shows clearly unequal spreads (variances differ), so we use **Welch's t-test** (`var.equal = FALSE`).
+
+```{r drug-placebo-test}
+t.test(drug_group, placebo_group, alternative = "greater", var.equal = FALSE)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the drug produces a significantly greater blood pressure reduction than the placebo.
+
+---
+
+## 3.5 Penalty Shoot-Outs
+
+**Question:** In 160 World Cup penalty shoot-outs (80 per team), the team shooting first scored 45 penalties while the team shooting second scored 35. Does the team shooting first have a significant advantage?
+
+$$H_0: p_1 \leq p_2 \quad \text{(no first-mover advantage)}$$
+$$H_1: p_1 > p_2 \quad \text{(first-mover advantage exists)}$$
+$$\alpha = 0.05$$
+
+```{r penalties}
+successes      <- c(45, 35)
+total_attempts <- c(80, 80)
+
+prop.test(successes, total_attempts, alternative = "greater")
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that there is a significant advantage for the team shooting first.
+
+---
+
+## 3.6 Two Surveys
+
+**Question:** Two surveys asked whether respondents supported a policy. Survey 1: 45 out of 80 said yes; Survey 2: 56 out of 103 said yes. Is there a significant difference in proportions?
+
+$$H_0: p_1 = p_2$$
+$$H_1: p_1 \neq p_2$$
+$$\alpha = 0.05$$
+
+```{r two-surveys}
+prop.test(c(45, 56), c(80, 103), alternative = "two.sided")
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference between the two survey proportions.
+
+---
+
+# 4. Chi-Squared Tests
+
+## 4.1 Dice Rolls
+
+**Question:** A die was rolled 150 times. The observed frequencies were: 1→22, 2→21, 3→22, 4→27, 5→22, 6→36. Is the die fair?
+
+$$H_0: \text{The die is fair (each face equally likely)}$$
+$$H_1: \text{The die is not fair}$$
+$$\alpha = 0.05$$
+
+```{r dice}
+observed <- c(22, 21, 22, 27, 22, 36)
+expected <- rep(1/6, 6)
+
+chisq.test(observed, p = expected)
+
+barplot(observed, names.arg = 1:6,
+        col = "steelblue",
+        main = "Observed Dice Roll Frequencies",
+        xlab = "Face", ylab = "Frequency")
+abline(h = 150/6, col = "red", lty = 2, lwd = 2)
+legend("topleft", legend = "Expected (fair)", col = "red", lty = 2)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the die is not fair.
+
+---
+
+## 4.2 Letter Distribution
+
+**Question:** In a sample of text, five letter groups were counted (100, 110, 80, 55, 14). The expected proportions based on English letter frequencies are 29%, 21%, 17%, 17%, 16%. Does the text match the expected distribution?
+
+$$H_0: \text{The observed letter frequencies match expected English frequencies}$$
+$$H_1: \text{The observed letter frequencies do not match}$$
+$$\alpha = 0.05$$
+
+```{r letters}
+observed_letters  <- c(100, 110, 80, 55, 14)
+expected_props    <- c(0.29, 0.21, 0.17, 0.17, 0.16)
+
+chisq.test(observed_letters, p = expected_props)
+
+barplot(rbind(observed_letters, expected_props * sum(observed_letters)),
+        beside = TRUE,
+        col = c("steelblue", "salmon"),
+        names.arg = paste("Group", 1:5),
+        main = "Observed vs Expected Letter Counts",
+        ylab = "Count")
+legend("topright", legend = c("Observed", "Expected"), fill = c("steelblue", "salmon"))
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the text does not follow typical English letter frequencies.
+
+---
+
+## 4.3 Star Trek
+
+**Question:** In Star Trek, crew members wear blue, gold, or red uniforms. Is uniform colour independent of whether a crew member dies?
+
+|        | Alive | Dead |
+|--------|-------|------|
+| Blue   | 135   | 10   |
+| Gold   | 19    | 10   |
+| Red    | 215   | 46   |
+
+$$H_0: \text{Uniform colour and survival are independent}$$
+$$H_1: \text{Uniform colour and survival are associated}$$
+$$\alpha = 0.05$$
+
+```{r star-trek}
+star_trek <- matrix(c(135, 10,
+                       19, 10,
+                      215, 46),
+                    nrow = 3, byrow = TRUE)
+rownames(star_trek) <- c("Blue", "Gold", "Red")
+colnames(star_trek) <- c("Alive", "Dead")
+
+print(star_trek)
+
+chisq.test(star_trek)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that uniform colour is associated with survival status (the red-shirt effect!).
+
+---
+
+## 4.4 Belts
+
+**Question:** Is there an association between seat-belt use and injury severity?
+
+|                  | None | Minor | Serious |
+|------------------|------|-------|---------|
+| No Belt          | 100  | 50    | 20      |
+| Belt (lap only)  | 80   | 40    | 30      |
+| Belt (full)      | 60   | 30    | 40      |
+
+$$H_0: \text{Belt usage and injury severity are independent}$$
+$$H_1: \text{Belt usage and injury severity are associated}$$
+$$\alpha = 0.05$$
+
+```{r belts}
+belts <- matrix(c(100, 50, 20,
+                   80, 40, 30,
+                   60, 30, 40),
+                nrow = 3, byrow = TRUE)
+rownames(belts) <- c("No Belt", "Lap Belt", "Full Belt")
+colnames(belts) <- c("No Injury", "Minor", "Serious")
+
+print(belts)
+
+chisq.test(belts)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that belt usage is significantly associated with injury severity.
+
+---
+
+# 5. Tests Using Datasets
+
+## 5.1 Differences Between Origins (Car MPG Data)
+
+**Question:** Using the `auto-mpg` dataset, compare fuel efficiency (MPG) between cars from USA, Europe, and Japan using t-tests.
+
+$$H_0: \mu_{\text{group1}} = \mu_{\text{group2}} \quad \text{(for each pair)}$$
+$$H_1: \mu_{\text{group1}} \neq \mu_{\text{group2}}$$
+$$\alpha = 0.05$$
+
+```{r car-data, eval=FALSE}
+# Note: requires the auto-mpg.data file in the working directory
+auto_data <- read.table("auto-mpg.data", header = TRUE, na.strings = "?")
+auto_data$origin <- factor(auto_data$origin,
+                           levels = c(1, 2, 3),
+                           labels = c("USA", "Europe", "Japan"))
+
+usa_mpg    <- auto_data$mpg[auto_data$origin == "USA"]
+europe_mpg <- auto_data$mpg[auto_data$origin == "Europe"]
+japan_mpg  <- auto_data$mpg[auto_data$origin == "Japan"]
+
+# Visualise
+boxplot(mpg ~ origin, data = auto_data,
+        col = c("lightblue", "lightgreen", "lightyellow"),
+        main = "MPG by Country of Origin",
+        ylab = "Miles per Gallon")
+
+# Pairwise t-tests
+cat("--- USA vs Japan ---\n")
+t.test(usa_mpg, japan_mpg)
+
+cat("--- USA vs Europe ---\n")
+t.test(usa_mpg, europe_mpg)
+
+cat("--- Europe vs Japan ---\n")
+t.test(europe_mpg, japan_mpg)
+```
+
+**Conclusion:** For each pairwise comparison, a p-value < 0.05 indicates a significant difference in mean MPG between those two groups.
+
+---
+
+## 5.2 Difference in Marks (English vs Math)
+
+**Question:** Using `SampleDataset2014.csv`, test whether English and Math marks differ significantly for the students. This is **paired** data (same students take both subjects).
+
+$$H_0: \mu_{\text{English}} = \mu_{\text{Math}} \quad \text{(no difference in mean marks)}$$
+$$H_1: \mu_{\text{English}} \neq \mu_{\text{Math}}$$
+$$\alpha = 0.05$$
+
+```{r marks}
+marks_data <- read.csv("SampleDataset2014.csv")
+
+# Keep only rows where both English and Math are available
+marks_filtered <- marks_data[!is.na(marks_data$English) & !is.na(marks_data$Math), ]
+
+cat("Number of complete cases:", nrow(marks_filtered), "\n")
+
+# Summary stats
+cat("\nEnglish - Mean:", mean(marks_filtered$English), 
+    "SD:", sd(marks_filtered$English), "\n")
+cat("Math    - Mean:", mean(marks_filtered$Math),    
+    "SD:", sd(marks_filtered$Math),    "\n")
+
+# Visualise
+boxplot(marks_filtered[, c("English", "Math")],
+        col = c("lightblue", "salmon"),
+        main = "English vs Math Marks",
+        ylab = "Score")
+
+# Check normality of differences
+diff_marks <- marks_filtered$English - marks_filtered$Math
+qqnorm(diff_marks, main = "Q-Q Plot of (English - Math)")
+qqline(diff_marks, col = "red")
+shapiro.test(diff_marks)
+
+# Paired t-test
+t.test(marks_filtered$English, marks_filtered$Math, paired = TRUE)
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference between English and Math scores for these students.
+
+---
+
+## 5.3 Five Surveys — Smokers
+
+**Question:** A study records the number of cigarettes smoked per day by participants before and after an intervention. Are there significantly fewer cigarettes smoked after the intervention?
+
+$$H_0: \mu_{\text{Before}} \leq \mu_{\text{After}} \quad \text{(intervention had no effect)}$$
+$$H_1: \mu_{\text{Before}} > \mu_{\text{After}} \quad \text{(intervention reduced smoking)}$$
+$$\alpha = 0.05$$
+
+```{r smokers, eval=FALSE}
+# Note: requires the Smokers.csv file in the working directory
+smokers_data <- read.csv("Smokers.csv")
+
+cat("Column names:", names(smokers_data), "\n")
+head(smokers_data)
+
+# Visualise
+boxplot(smokers_data[, c("Before", "After")],
+        col = c("tomato", "lightgreen"),
+        main = "Cigarettes per Day: Before vs After Intervention",
+        ylab = "Cigarettes per Day")
+
+# Check normality of differences
+diff_smoke <- smokers_data$Before - smokers_data$After
+shapiro.test(diff_smoke)
+
+# Paired t-test (or Wilcoxon if non-normal)
+t.test(smokers_data$Before, smokers_data$After, paired = TRUE, alternative = "greater")
+```
+
+**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the intervention significantly reduced the number of cigarettes smoked per day.
