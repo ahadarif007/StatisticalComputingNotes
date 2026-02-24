@@ -11,9 +11,17 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # 1. Some Distributions (Quick Warm-Up)
 
-Visualise a few common distributions to warm up.
+Before we dive into hypothesis testing, let's **visualise a few common probability distributions**. Think of a probability distribution as a recipe that tells you how likely each possible outcome is.
+
+- **Why do we care?** Many statistical tests assume that our data follows a particular distribution (often the Normal distribution). Seeing these shapes helps us recognise them later.
 
 ## Poisson Distribution
+
+The **Poisson distribution** is used when we're counting how many times something happens in a fixed period — for example, "how many emails do I get per hour?"
+
+- It has one parameter, **lambda (λ)**, which is the *average* number of events.
+- When λ is small (e.g. 5), the distribution is skewed to the right.
+- When λ is larger (e.g. 12), it starts to look more like a bell curve.
 
 ```{r poisson}
 # Poisson with mean (lambda) = 5
@@ -29,6 +37,13 @@ barplot(dpois(0:30, 12), names.arg = 0:30,
 
 ## Normal Distribution
 
+The **Normal (Gaussian) distribution** is the famous "bell curve". It's defined by two parameters:
+
+- **Mean (μ)** — the centre of the bell.
+- **Standard deviation (σ)** — how spread out the bell is. A small σ gives a tall, narrow bell; a large σ gives a wide, flat one.
+
+The **standard normal** has μ = 0 and σ = 1. Most values fall between −2 and +2.
+
 ```{r normal}
 x <- seq(-4, 4, length.out = 300)
 plot(x, dnorm(x, mean = 0, sd = 1), type = "l", lwd = 2, col = "darkgreen",
@@ -37,6 +52,10 @@ plot(x, dnorm(x, mean = 0, sd = 1), type = "l", lwd = 2, col = "darkgreen",
 ```
 
 ## Gamma Distribution
+
+The **Gamma distribution** is used for things that are always positive and often skewed right — like *waiting times* (e.g., how long until the next bus arrives).
+
+- It has two parameters: **shape** (controls the curve's peakiness) and **rate** (controls how stretched it is).
 
 ```{r gamma}
 x <- seq(0, 20, length.out = 300)
@@ -47,6 +66,11 @@ plot(x, dgamma(x, shape = 2, rate = 1), type = "l", lwd = 2, col = "purple",
 
 ## Chi-Squared Distribution
 
+The **Chi-squared (χ²) distribution** pops up a lot in hypothesis testing (we'll use it in Section 4). It has one parameter, **degrees of freedom (df)**, which controls its shape.
+
+- With a small df (e.g. 2), the curve is highly right-skewed.
+- As df increases, the curve becomes more symmetric and starts to look like a Normal distribution.
+
 ```{r chisq-dist}
 x <- seq(0, 20, length.out = 300)
 plot(x, dchisq(x, df = 5), type = "l", lwd = 2, col = "darkorange",
@@ -56,18 +80,33 @@ plot(x, dchisq(x, df = 5), type = "l", lwd = 2, col = "darkorange",
 
 ---
 
-# 2. Hypothesis Testing
+# 2. Hypothesis Testing — The Big Picture
 
-When performing hypothesis tests we always:
+Hypothesis testing is like a **courtroom trial for data**:
 
-1. State the null hypothesis $H_0$ and alternative hypothesis $H_1$.  
-2. State the significance level $\alpha$ (usually 0.05).  
-3. Check assumptions (normality, equal variances, independence, etc.).  
-4. Choose the appropriate test (parametric or non-parametric).  
-5. Compute the test statistic and p-value.  
-6. Make a conclusion — **reject** or **fail to reject** $H_0$ — and interpret the result in plain English.
+| Courtroom analogy | Statistics equivalent |
+|---|---|
+| The defendant is "innocent until proven guilty" | We start by assuming the **null hypothesis** ($H_0$) is true — nothing special is going on |
+| The prosecution presents evidence | We collect data and compute a **test statistic** |
+| The jury decides: is the evidence strong enough? | We look at the **p-value** — how surprising our data would be *if $H_0$ were true* |
+| Verdict: guilty or not guilty | We **reject** $H_0$ (evidence is strong) or **fail to reject** $H_0$ (evidence isn't strong enough) |
 
-*Nothing to show computationally in this section — see sections 3–5 for worked examples.*
+### Step-by-step recipe for every hypothesis test
+
+Every single test in this lab follows the same 6 steps:
+
+1. **State the hypotheses.** Write down $H_0$ (the boring "nothing is happening" claim) and $H_1$ (the interesting claim you want to check).
+2. **Choose a significance level** $\alpha$ (almost always **0.05**, which means we're willing to accept a 5% chance of wrongly rejecting $H_0$).
+3. **Check assumptions.** Different tests have different requirements (e.g., "data must be approximately normal"). We check these with plots and formal tests.
+4. **Pick the right test.** Based on our assumptions:
+   - Data looks normal? → Use a **parametric test** (like a t-test). These are more powerful when assumptions are met.
+   - Data doesn't look normal, or the sample is very small? → Use a **non-parametric test** (like the Wilcoxon test). These make fewer assumptions and are safer.
+5. **Run the test in R** and look at the **p-value** in the output.
+6. **Make a conclusion:**
+   - **p-value < 0.05** → Reject $H_0$. The evidence is strong enough to support $H_1$.
+   - **p-value ≥ 0.05** → Fail to reject $H_0$. We don't have enough evidence to support $H_1$ (but this does NOT prove $H_0$ is true!).
+
+*Sections 3–5 below walk through this recipe on many different examples.*
 
 ---
 
@@ -75,15 +114,28 @@ When performing hypothesis tests we always:
 
 ## 3.1 Study Time Before and After Intervention
 
-**Question:** A study-skills workshop claims to improve student study habits. Ten students recorded their weekly study hours before and after the workshop. Is there evidence that the workshop increased study time?
+### The scenario
+A study-skills workshop claims to improve student study habits. **Ten students** recorded their weekly study hours **before** and **after** the workshop. We want to check: did the workshop actually increase study time?
 
-Let $\mu_1$ = mean hours **before** and $\mu_2$ = mean hours **after**.
+### Setting up the hypotheses
 
-$$H_0: \mu_1 \geq \mu_2 \quad \text{(workshop made no improvement)}$$
+- $\mu_1$ = mean hours **before** the workshop  
+- $\mu_2$ = mean hours **after** the workshop
+
+$$H_0: \mu_1 \geq \mu_2 \quad \text{(workshop made no improvement — or even made it worse)}$$
 $$H_1: \mu_1 < \mu_2 \quad \text{(workshop improved study time)}$$
 $$\alpha = 0.05$$
 
-This is **paired** data (same students measured twice), so we first check whether the **differences** are approximately normal.
+### Why is this "paired" data?
+
+Because the **same 10 students** were measured twice (before and after). Their results are *linked*. We don't compare group A to group B — we compare each student to *themselves*. This means we work with the **differences** (before − after) for each student.
+
+### Checking assumptions
+
+We need to check if these differences are roughly normally distributed. We'll use:
+
+- A **Q-Q plot** (if the dots follow the red line, the data is approximately normal).
+- The **Shapiro-Wilk test** (if the p-value > 0.05, we have no strong evidence against normality).
 
 ```{r before-after}
 before <- c(12, 15, 10, 18, 14, 11, 16, 13, 17, 12)
@@ -97,22 +149,38 @@ qqline(diff, col = "red")
 shapiro.test(diff)
 ```
 
-The differences do not appear strongly non-normal, but since the sample is small (n = 10) and the Q-Q plot shows some deviation, we use the **Wilcoxon signed-rank test** (non-parametric paired test) to be safe.
+### Choosing the test
+
+The Q-Q plot shows some wobble and the sample is very small (only 10 students), so we play it safe and use the **Wilcoxon signed-rank test**. This is the **non-parametric version of a paired t-test** — it doesn't need the data to be perfectly normal.
+
+- `paired = TRUE` tells R these are paired (matched) observations.
+- `alternative = "less"` tells R we're testing whether `before` is *less than* `after`.
 
 ```{r before-after-test}
 wilcox.test(before, after, alternative = "less", paired = TRUE)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the workshop significantly increased study time.
+### How to read the output
+
+Look at the **p-value** in the output above.
+
+- **If p-value < 0.05:** We reject $H_0$ and conclude that the workshop **significantly increased** study time. 🎉
+- **If p-value ≥ 0.05:** We fail to reject $H_0$ — we don't have strong enough evidence that the workshop helped.
 
 ---
 
 ## 3.2 Mobile-Phone Usage
 
-**Question:** Mobile-phone usage is claimed to exceed 5 hours per week on average. Data from 26 students is provided. Test at $\alpha = 0.05$.
+### The scenario
+Someone claims that students use their mobile phones for **more than 5 hours per week** on average. We surveyed **26 students** and recorded their weekly phone usage (in hours). Let's test this claim.
 
-$$H_0: \mu \leq 5$$
-$$H_1: \mu > 5$$
+### Setting up the hypotheses
+
+$$H_0: \mu \leq 5 \quad \text{(average usage is 5 hours or less)}$$
+$$H_1: \mu > 5 \quad \text{(average usage IS more than 5 hours)}$$
+$$\alpha = 0.05$$
+
+### Checking assumptions
 
 ```{r mobile-phone}
 x <- c(6, 4, 8, 7, 5, 6, 9, 3, 5, 7, 4, 6, 8, 5, 7,
@@ -124,23 +192,38 @@ qqline(x, col = "red")
 shapiro.test(x)
 ```
 
-The data is not normally distributed, so we use the **Wilcoxon signed-rank test** (one-sample, non-parametric).
+### Choosing the test
+
+The Shapiro-Wilk test indicates the data is **not normally distributed**, so we use the **Wilcoxon signed-rank test** (the non-parametric alternative to a one-sample t-test).
+
+- `mu = 5` tells R to test against the claimed average of 5 hours.
+- `alternative = "greater"` tells R we're checking if the true average is *greater* than 5.
 
 ```{r mobile-phone-test}
 wilcox.test(x, mu = 5, alternative = "greater")
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude average usage is significantly greater than 5 hours.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. Average phone usage is significantly more than 5 hours.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. Not enough evidence to confirm the claim.
 
 ---
 
 ## 3.3 Compare Schools
 
-**Question:** Compare exam scores from two schools (A and B). Is there a significant difference in mean scores?
+### The scenario
+We have exam scores from two **different** schools (School A and School B). We want to know: is there a **significant difference** in mean scores between the two schools?
 
-$$H_0: \mu_A = \mu_B$$
-$$H_1: \mu_A \neq \mu_B$$
+### Setting up the hypotheses
+
+$$H_0: \mu_A = \mu_B \quad \text{(no difference in mean scores)}$$
+$$H_1: \mu_A \neq \mu_B \quad \text{(there IS a difference)}$$
 $$\alpha = 0.05$$
+
+> **Note:** This is a "two-tailed" test (≠) because we're not predicting *which* school is better — just whether they differ.
+
+### Checking assumptions
 
 ```{r compare-schools}
 school_A <- c(78, 85, 90, 76, 82, 79, 88, 91, 85, 80, 83, 87, 92, 84, 81)
@@ -158,23 +241,35 @@ boxplot(school_A, school_B,
         ylab = "Score")
 ```
 
-Both groups appear normally distributed. We also assume equal variances (both groups have similar spreads), so we use an **independent two-sample t-test**.
+### Choosing the test
+
+Both groups look approximately normal (Shapiro-Wilk p-values > 0.05) and their spreads are similar (the boxplots are roughly the same width). So we can use a **two-sample t-test** with `var.equal = TRUE` (this means we're assuming equal variances).
+
+- This is an **independent** (unpaired) test because the students in School A are *different people* from those in School B.
 
 ```{r compare-schools-test}
 t.test(school_A, school_B, var.equal = TRUE)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference in mean scores between the two schools.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. The two schools have significantly different mean scores.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. No significant difference detected.
 
 ---
 
 ## 3.4 Placebo vs Drug
 
-**Question:** A drug is claimed to lower blood pressure more than a placebo. Test whether the drug group has a significantly greater reduction in blood pressure.
+### The scenario
+A pharmaceutical company claims their drug lowers blood pressure more than a placebo (a "sugar pill" with no active ingredient). We recorded the **blood pressure reduction** (in mmHg) for patients in two groups: one group took the drug, the other took the placebo.
 
-$$H_0: \mu_{\text{drug}} \leq \mu_{\text{placebo}}$$
-$$H_1: \mu_{\text{drug}} > \mu_{\text{placebo}}$$
+### Setting up the hypotheses
+
+$$H_0: \mu_{\text{drug}} \leq \mu_{\text{placebo}} \quad \text{(drug is no better than placebo)}$$
+$$H_1: \mu_{\text{drug}} > \mu_{\text{placebo}} \quad \text{(drug reduces BP more than placebo)}$$
 $$\alpha = 0.05$$
+
+### Checking assumptions
 
 ```{r drug-placebo}
 drug_group    <- c(8.1, 7.6, 8.9, 9.2, 7.8, 8.3, 9.1, 8.7, 9.0, 8.5, 8.6, 9.3)
@@ -192,23 +287,43 @@ boxplot(drug_group, placebo_group,
         ylab = "Reduction (mmHg)")
 ```
 
-Normality holds for both groups. However, the boxplot shows clearly unequal spreads (variances differ), so we use **Welch's t-test** (`var.equal = FALSE`).
+### Choosing the test
+
+Both groups pass the normality check ✅. However, look at the boxplot — the **Drug** group's values are tightly clustered, while the **Placebo** group is much more spread out. This means their **variances are unequal** ❌.
+
+When variances are unequal, we use **Welch's t-test** (set `var.equal = FALSE`). Welch's t-test adjusts the degrees of freedom to account for the different spreads.
 
 ```{r drug-placebo-test}
 t.test(drug_group, placebo_group, alternative = "greater", var.equal = FALSE)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the drug produces a significantly greater blood pressure reduction than the placebo.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. The drug produces a significantly greater blood pressure reduction than the placebo.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. Not enough evidence that the drug is better.
 
 ---
 
 ## 3.5 Penalty Shoot-Outs
 
-**Question:** In 160 World Cup penalty shoot-outs (80 per team), the team shooting first scored 45 penalties while the team shooting second scored 35. Does the team shooting first have a significant advantage?
+### The scenario
+Does the team that shoots **first** in a World Cup penalty shoot-out have an advantage? In 160 shoot-outs (80 per team), the team shooting first scored **45** penalties while the team shooting second scored **35**. Is this difference statistically significant?
+
+### Setting up the hypotheses
+
+- $p_1$ = success rate for the team shooting first  
+- $p_2$ = success rate for the team shooting second
 
 $$H_0: p_1 \leq p_2 \quad \text{(no first-mover advantage)}$$
 $$H_1: p_1 > p_2 \quad \text{(first-mover advantage exists)}$$
 $$\alpha = 0.05$$
+
+### Choosing the test
+
+Here we're comparing **proportions** (success rates), not means. R's `prop.test()` does this for us:
+
+- We pass in the number of successes and the total number of attempts for each group.
+- `alternative = "greater"` tells R we're testing if the first proportion is *higher*.
 
 ```{r penalties}
 successes      <- c(45, 35)
@@ -217,35 +332,73 @@ total_attempts <- c(80, 80)
 prop.test(successes, total_attempts, alternative = "greater")
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that there is a significant advantage for the team shooting first.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. There IS a significant first-mover advantage.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. No significant evidence of an advantage.
 
 ---
 
 ## 3.6 Two Surveys
 
-**Question:** Two surveys asked whether respondents supported a policy. Survey 1: 45 out of 80 said yes; Survey 2: 56 out of 103 said yes. Is there a significant difference in proportions?
+### The scenario
+Two surveys asked respondents whether they supported a new government policy.
 
-$$H_0: p_1 = p_2$$
-$$H_1: p_1 \neq p_2$$
+- **Survey 1:** 45 out of 80 people said "Yes" (56.25%)
+- **Survey 2:** 56 out of 103 people said "Yes" (54.37%)
+
+Is there a significant **difference** between these two proportions?
+
+### Setting up the hypotheses
+
+$$H_0: p_1 = p_2 \quad \text{(both surveys show the same level of support)}$$
+$$H_1: p_1 \neq p_2 \quad \text{(the levels of support differ)}$$
 $$\alpha = 0.05$$
+
+### Running the test
+
+Again, we use `prop.test()` because we're comparing two proportions. This time `alternative = "two.sided"` because we're just checking if they *differ* (we don't care which is bigger).
 
 ```{r two-surveys}
 prop.test(c(45, 56), c(80, 103), alternative = "two.sided")
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference between the two survey proportions.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. The two surveys show significantly different levels of support.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. The difference isn't statistically significant — it could just be due to chance.
 
 ---
 
 # 4. Chi-Squared Tests
 
+Chi-squared tests are used when your data is **categorical** (groups / categories) rather than numerical. There are two main types:
+
+| Type | What it tests | Example |
+|---|---|---|
+| **Goodness-of-fit** | Does the distribution of one categorical variable match what we expected? | "Is this die fair?" |
+| **Test of independence** | Are two categorical variables related, or are they independent? | "Is shirt colour related to survival?" |
+
 ## 4.1 Dice Rolls
 
-**Question:** A die was rolled 150 times. The observed frequencies were: 1→22, 2→21, 3→22, 4→27, 5→22, 6→36. Is the die fair?
+### The scenario
+You rolled a die **150 times** and recorded how often each face appeared:
 
-$$H_0: \text{The die is fair (each face equally likely)}$$
-$$H_1: \text{The die is not fair}$$
+| Face | 1 | 2 | 3 | 4 | 5 | 6 |
+|------|---|---|---|---|---|---|
+| Count | 22 | 21 | 22 | 27 | 22 | 36 |
+
+If the die were **perfectly fair**, we'd expect each face to appear 150 ÷ 6 = **25 times**. Face 6 appeared 36 times — is that just bad luck, or is the die actually loaded?
+
+### Setting up the hypotheses
+
+$$H_0: \text{The die is fair (each face has probability } \frac{1}{6}\text{)}$$
+$$H_1: \text{The die is NOT fair (at least one face has a different probability)}$$
 $$\alpha = 0.05$$
+
+### Running the chi-squared goodness-of-fit test
+
+We give `chisq.test()` our observed counts and the expected probabilities. The red dashed line on the bar plot shows the expected count (25) for a fair die.
 
 ```{r dice}
 observed <- c(22, 21, 22, 27, 22, 36)
@@ -261,17 +414,31 @@ abline(h = 150/6, col = "red", lty = 2, lwd = 2)
 legend("topleft", legend = "Expected (fair)", col = "red", lty = 2)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the die is not fair.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. The die is likely **not fair**.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. There isn't enough evidence to say the die is unfair — the variation we see could be due to chance.
 
 ---
 
 ## 4.2 Letter Distribution
 
-**Question:** In a sample of text, five letter groups were counted (100, 110, 80, 55, 14). The expected proportions based on English letter frequencies are 29%, 21%, 17%, 17%, 16%. Does the text match the expected distribution?
+### The scenario
+In a sample of text, letters were grouped into 5 categories, and we counted how many fell into each group:
 
-$$H_0: \text{The observed letter frequencies match expected English frequencies}$$
-$$H_1: \text{The observed letter frequencies do not match}$$
+| Group | 1 | 2 | 3 | 4 | 5 |
+|-------|---|---|---|---|---|
+| Observed count | 100 | 110 | 80 | 55 | 14 |
+
+Based on typical English letter frequencies, the **expected proportions** for these groups are 29%, 21%, 17%, 17%, and 16%. Does our text match this pattern, or is it unusual?
+
+### Setting up the hypotheses
+
+$$H_0: \text{The letter frequencies match typical English}$$
+$$H_1: \text{The letter frequencies do NOT match typical English}$$
 $$\alpha = 0.05$$
+
+### Running the test
 
 ```{r letters}
 observed_letters  <- c(100, 110, 80, 55, 14)
@@ -288,13 +455,17 @@ barplot(rbind(observed_letters, expected_props * sum(observed_letters)),
 legend("topright", legend = c("Observed", "Expected"), fill = c("steelblue", "salmon"))
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the text does not follow typical English letter frequencies.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. This text does NOT follow typical English letter frequencies (perhaps it's from a different language, or encoded in some way).
+- **p-value ≥ 0.05** → Fail to reject $H_0$. The text looks consistent with normal English.
 
 ---
 
 ## 4.3 Star Trek
 
-**Question:** In Star Trek, crew members wear blue, gold, or red uniforms. Is uniform colour independent of whether a crew member dies?
+### The scenario
+In Star Trek, crew members wear uniforms of different colours: **Blue**, **Gold**, or **Red**. There's a famous joke that "red-shirt" crew members die more often. Let's test this with actual data!
 
 |        | Alive | Dead |
 |--------|-------|------|
@@ -302,9 +473,17 @@ legend("topright", legend = c("Observed", "Expected"), fill = c("steelblue", "sa
 | Gold   | 19    | 10   |
 | Red    | 215   | 46   |
 
-$$H_0: \text{Uniform colour and survival are independent}$$
-$$H_1: \text{Uniform colour and survival are associated}$$
+We want to know: **Is uniform colour associated with whether a crew member dies?** (Or are deaths spread evenly across all colours?)
+
+### Setting up the hypotheses
+
+$$H_0: \text{Uniform colour and survival are independent (no relationship)}$$
+$$H_1: \text{Uniform colour and survival ARE associated}$$
 $$\alpha = 0.05$$
+
+### Running the chi-squared test of independence
+
+When we have a table like this (rows = one category, columns = another), we use a **chi-squared test of independence**. We pass the entire table into `chisq.test()`.
 
 ```{r star-trek}
 star_trek <- matrix(c(135, 10,
@@ -319,23 +498,31 @@ print(star_trek)
 chisq.test(star_trek)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that uniform colour is associated with survival status (the red-shirt effect!).
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. Uniform colour **IS** associated with survival (the "red-shirt effect" has statistical backing! 👀).
+- **p-value ≥ 0.05** → Fail to reject $H_0$. No significant association — deaths are spread roughly evenly across colours.
 
 ---
 
 ## 4.4 Belts
 
-**Question:** Is there an association between seat-belt use and injury severity?
+### The scenario
+Is there a relationship between **seat-belt use** and **injury severity** in car accidents?
 
-|                  | None | Minor | Serious |
-|------------------|------|-------|---------|
-| No Belt          | 100  | 50    | 20      |
-| Belt (lap only)  | 80   | 40    | 30      |
-| Belt (full)      | 60   | 30    | 40      |
+|                  | No Injury | Minor | Serious |
+|------------------|-----------|-------|---------|
+| No Belt          | 100       | 50    | 20      |
+| Belt (lap only)  | 80        | 40    | 30      |
+| Belt (full)      | 60        | 30    | 40      |
 
-$$H_0: \text{Belt usage and injury severity are independent}$$
-$$H_1: \text{Belt usage and injury severity are associated}$$
+### Setting up the hypotheses
+
+$$H_0: \text{Belt usage and injury severity are independent (not related)}$$
+$$H_1: \text{Belt usage and injury severity ARE associated}$$
 $$\alpha = 0.05$$
+
+### Running the test
 
 ```{r belts}
 belts <- matrix(c(100, 50, 20,
@@ -350,19 +537,35 @@ print(belts)
 chisq.test(belts)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude that belt usage is significantly associated with injury severity.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. Belt usage IS significantly associated with injury severity. (In this data, interestingly, the "full belt" category doesn't always align with what you'd expect — think about why that might be!)
+- **p-value ≥ 0.05** → Fail to reject $H_0$. No significant association detected.
 
 ---
 
 # 5. Tests Using Datasets
 
+In the previous section we typed our data directly into R. In practice, data usually comes from **CSV files** or other datasets. This section shows how to load data from files and apply the same testing logic.
+
 ## 5.1 Differences Between Origins (Car MPG Data)
 
-**Question:** Using the `auto-mpg` dataset, compare fuel efficiency (MPG) between cars from USA, Europe, and Japan using t-tests.
+### The scenario
+We have a dataset of cars with their fuel efficiency (**MPG** = miles per gallon) and the car's **country of origin** (USA, Europe, or Japan). We want to know: **Do cars from different countries have significantly different fuel efficiency?**
 
-$$H_0: \mu_{\text{group1}} = \mu_{\text{group2}} \quad \text{(for each pair)}$$
-$$H_1: \mu_{\text{group1}} \neq \mu_{\text{group2}}$$
+### Setting up the hypotheses
+
+For each pair of countries (e.g., USA vs Japan):
+
+$$H_0: \mu_{\text{group1}} = \mu_{\text{group2}} \quad \text{(no difference in mean MPG)}$$
+$$H_1: \mu_{\text{group1}} \neq \mu_{\text{group2}} \quad \text{(there IS a difference)}$$
 $$\alpha = 0.05$$
+
+### Running the tests
+
+We compare all three pairs: USA vs Japan, USA vs Europe, and Europe vs Japan. This is called **pairwise comparison**.
+
+> **Note:** This code chunk is set to `eval=FALSE` because it requires the `auto-mpg.data` file to be in your working directory. If you have that file, change `eval=FALSE` to `eval=TRUE` in the chunk header to run it.
 
 ```{r car-data, eval=FALSE}
 # Note: requires the auto-mpg.data file in the working directory
@@ -392,17 +595,31 @@ cat("--- Europe vs Japan ---\n")
 t.test(europe_mpg, japan_mpg)
 ```
 
-**Conclusion:** For each pairwise comparison, a p-value < 0.05 indicates a significant difference in mean MPG between those two groups.
+### How to read the output
+
+For each comparison, check the p-value:
+
+- **p-value < 0.05** → The two countries have significantly different mean MPG.
+- **p-value ≥ 0.05** → No significant difference between those two countries.
 
 ---
 
 ## 5.2 Difference in Marks (English vs Math)
 
-**Question:** Using `SampleDataset2014.csv`, test whether English and Math marks differ significantly for the students. This is **paired** data (same students take both subjects).
+### The scenario
+We have a dataset (`SampleDataset2014.csv`) containing students' **English** and **Math** marks. We want to know: do students score significantly differently in English compared to Math?
 
-$$H_0: \mu_{\text{English}} = \mu_{\text{Math}} \quad \text{(no difference in mean marks)}$$
-$$H_1: \mu_{\text{English}} \neq \mu_{\text{Math}}$$
+This is **paired data** because the same students took both subjects — we're comparing each student's English score to their *own* Math score.
+
+### Setting up the hypotheses
+
+$$H_0: \mu_{\text{English}} = \mu_{\text{Math}} \quad \text{(no difference in average marks)}$$
+$$H_1: \mu_{\text{English}} \neq \mu_{\text{Math}} \quad \text{(there IS a difference)}$$
 $$\alpha = 0.05$$
+
+### Running the test
+
+We first remove any students who are missing either their English or Math score, then check whether the **differences** (English − Math) are normally distributed, and finally run a **paired t-test**.
 
 ```{r marks}
 marks_data <- read.csv("SampleDataset2014.csv")
@@ -434,17 +651,29 @@ shapiro.test(diff_marks)
 t.test(marks_filtered$English, marks_filtered$Math, paired = TRUE)
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude there is a significant difference between English and Math scores for these students.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. Students score significantly differently in English vs Math.
+- **p-value ≥ 0.05** → Fail to reject $H_0$. No significant difference between the two subjects.
 
 ---
 
 ## 5.3 Five Surveys — Smokers
 
-**Question:** A study records the number of cigarettes smoked per day by participants before and after an intervention. Are there significantly fewer cigarettes smoked after the intervention?
+### The scenario
+A group of smokers recorded the number of **cigarettes smoked per day** before and after an anti-smoking intervention. We want to know: did the intervention actually reduce smoking?
 
-$$H_0: \mu_{\text{Before}} \leq \mu_{\text{After}} \quad \text{(intervention had no effect)}$$
+### Setting up the hypotheses
+
+$$H_0: \mu_{\text{Before}} \leq \mu_{\text{After}} \quad \text{(intervention had no effect — or made it worse)}$$
 $$H_1: \mu_{\text{Before}} > \mu_{\text{After}} \quad \text{(intervention reduced smoking)}$$
 $$\alpha = 0.05$$
+
+### Running the test
+
+This is **paired data** again (same people measured before and after), so we use a **paired t-test** with `alternative = "greater"` (we're testing if "Before" values are *greater than* "After" values, which would mean smoking decreased).
+
+> **Note:** This chunk requires `Smokers.csv` in your working directory. If you don't have it, change `eval=FALSE` in the chunk header.
 
 ```{r smokers, eval=FALSE}
 # Note: requires the Smokers.csv file in the working directory
@@ -467,4 +696,24 @@ shapiro.test(diff_smoke)
 t.test(smokers_data$Before, smokers_data$After, paired = TRUE, alternative = "greater")
 ```
 
-**Conclusion:** If p-value < 0.05 we reject $H_0$ and conclude the intervention significantly reduced the number of cigarettes smoked per day.
+### How to read the output
+
+- **p-value < 0.05** → Reject $H_0$. The intervention significantly reduced smoking! 🎉
+- **p-value ≥ 0.05** → Fail to reject $H_0$. Not enough evidence that the intervention worked.
+
+---
+
+# Quick Reference: Which Test Should I Use?
+
+| Situation | Normal data? | Test to use |
+|---|---|---|
+| One sample vs a known value | Yes | One-sample t-test |
+| One sample vs a known value | No | Wilcoxon signed-rank test |
+| Two paired samples (same people, before/after) | Yes | Paired t-test |
+| Two paired samples | No | Wilcoxon signed-rank test |
+| Two independent groups, equal variances | Yes | Two-sample t-test (`var.equal = TRUE`) |
+| Two independent groups, unequal variances | Yes | Welch's t-test (`var.equal = FALSE`) |
+| Two independent groups | No | Wilcoxon rank-sum test |
+| Comparing proportions | — | `prop.test()` |
+| Categorical data (one variable) | — | Chi-squared goodness-of-fit |
+| Categorical data (two variables) | — | Chi-squared test of independence |

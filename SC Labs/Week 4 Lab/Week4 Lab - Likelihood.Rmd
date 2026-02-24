@@ -16,37 +16,69 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Introduction
 
-In statistics, the **likelihood function** is one of our most powerful tools for estimating unknown parameters. Given a model and some observed data, the likelihood tells us: *how probable is this data, as a function of the unknown parameter?*
+## What is "Likelihood"?
 
-Formally, if we observe data $x_1, x_2, \ldots, x_n$ from a distribution with density (or mass function) $f(x \mid \theta)$, the **likelihood** is:
+Imagine you flip a coin 10 times and get 8 heads. You might ask: *"Is this a fair coin?"* The likelihood function helps you answer that question by telling you **how plausible each possible value of the unknown parameter is**, given the data you observed.
+
+Here's the key idea in plain English:
+
+> **Likelihood** asks: "If the true parameter were *this* value, how probable would my observed data be?"
+
+We calculate this for *every* possible parameter value, and whichever value makes our data the **most probable** is our best guess. That best guess is called the **Maximum Likelihood Estimate (MLE)**.
+
+### The maths (don't panic!)
+
+If we observe data points $x_1, x_2, \ldots, x_n$ and our model says each data point follows a distribution with formula $f(x \mid \theta)$, then the **likelihood function** is:
 
 $$
 L(\theta) = \prod_{i=1}^n f(x_i \mid \theta)
 $$
 
-Because products of many small numbers become numerically unstable, we almost always work with the **log-likelihood**:
+This is just the **product** (multiply together) of the probability of each data point. The $\theta$ is the unknown parameter we're trying to estimate.
+
+### Why do we use the "log-likelihood"?
+
+Multiplying many small probabilities together gives a *tiny* number — so tiny that computers can't handle it precisely (they get rounding errors). Taking the **logarithm** converts the product into a **sum**, which is much more numerically stable:
 
 $$
 \ell(\theta) = \sum_{i=1}^n \log f(x_i \mid \theta)
 $$
 
-The **maximum likelihood estimate (MLE)** $\hat{\theta}$ is the value of $\theta$ that maximises $\ell(\theta)$.
+- The **log-likelihood** ($\ell$) and the likelihood ($L$) reach their peak at exactly the same value of $\theta$, so maximising either one gives the same answer.
+- From now on, we'll almost always work with the **log-likelihood**.
+
+### The Maximum Likelihood Estimate (MLE)
+
+The **MLE** $\hat{\theta}$ is simply the value of $\theta$ that makes $\ell(\theta)$ as large as possible — i.e., the peak of the log-likelihood curve.
 
 ------------------------------------------------------------------------
 
 # 1. Computing and Plotting Log-Likelihoods
 
-Most density functions in R start with the letter `d` (e.g. `dpois`, `dnorm`, `dbinom`). They all accept a `log = TRUE` argument that returns the log-density directly, making it easy to compute log-likelihoods.
+In R, probability distribution functions start with the letter `d` (for "density"):
+
+| Distribution | R function | Example |
+|---|---|---|
+| Poisson | `dpois()` | Counting rare events |
+| Normal | `dnorm()` | Bell-curve data |
+| Binomial | `dbinom()` | Success/failure trials |
+| Exponential | `dexp()` | Waiting times |
+
+All of these accept a `log = TRUE` argument, which returns $\log f(x \mid \theta)$ directly. This makes computing log-likelihoods easy — just `sum()` up the log-densities!
 
 ## Worked Example: Horse Kick Data
 
-The classic horse kick dataset records the number of deaths by horse kick per year in 14 Prussian cavalry corps over 20 years (200 observations total). A Poisson model is a natural choice since we are counting rare events.
+This is a famous historical dataset: it counts the **number of soldiers killed by horse kicks** per year in 14 Prussian cavalry corps over 20 years (200 observations total).
 
-If $X_i \sim \text{Poisson}(\lambda)$, the log-likelihood is:
+Since we're counting *how many times* a rare event happened, a **Poisson distribution** is a natural choice. The Poisson has one parameter: **λ (lambda)**, the average number of events.
+
+The Poisson log-likelihood is:
 
 $$
 \ell(\lambda) = \sum_{i=1}^n \left[ x_i \log(\lambda) - \lambda - \log(x_i!) \right]
 $$
+
+Don't worry about memorising this formula — the key point is that R's `dpois(..., log = TRUE)` does all the work for us.
 
 ```{r horse-kick}
 x <- rep(0:4, c(109, 65, 22, 3, 1))  ## Horse kick data: value repeated by frequency
@@ -67,19 +99,27 @@ legend("topright", legend = c("Log-likelihood", expression(hat(lambda) == bar(x)
        col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
 ```
 
-> **Note:** For the Poisson distribution, it can be shown analytically that the MLE is $\hat{\lambda} = \bar{x}$, the sample mean. You can see this corresponds to the peak of the log-likelihood curve above.
+> **What to notice:** The curve has a clear peak. The red dashed line shows the **sample mean** $\bar{x}$, and it lands right at the peak. This isn't a coincidence — for the Poisson distribution, the MLE is *always* equal to the sample mean: $\hat{\lambda} = \bar{x}$.
 
 ------------------------------------------------------------------------
 
 ## (a) Birth Weight of Infants of Smokers
 
-The `birthwt` dataset from the `MASS` package contains birth weight data from a study at a Massachusetts hospital. We will model the birth weights (in kg) of infants born to **smokers** using a Normal distribution, assuming the standard deviation is known: $\sigma = 1$.
+### The scenario
+
+The `birthwt` dataset (originally from the `MASS` package) contains birth weight data from a Massachusetts hospital. We'll focus on infants born to **smoking mothers** and model their birth weights (converted to kg) using a **Normal distribution**.
+
+To keep things simple for now, we'll **assume the standard deviation is known** ($\sigma = 1$) and only estimate the **mean** ($\mu$).
+
+### The maths
 
 If $X_i \sim N(\mu, 1)$, the log-likelihood as a function of $\mu$ is:
 
 $$
-\ell(\mu) = \sum_{i=1}^n \log \phi\left(\frac{x_i - \mu}{1}\right) = -\frac{n}{2}\log(2\pi) - \frac{1}{2}\sum_{i=1}^n (x_i - \mu)^2
+\ell(\mu) = -\frac{n}{2}\log(2\pi) - \frac{1}{2}\sum_{i=1}^n (x_i - \mu)^2
 $$
+
+The important part is the $(x_i - \mu)^2$ term — the log-likelihood penalises values of $\mu$ that are far from the data points. The best $\mu$ is the one that minimises the total squared distance to all data points, which turns out to be... the sample mean! (No surprise there.)
 
 ```{r birthwt-data}
 birthwt <- read.csv("birthwt.csv")
@@ -94,7 +134,7 @@ hist(bwt_smokers, breaks = 15, col = "lightblue", border = "white",
      xlab = "Birth weight (kg)")
 ```
 
-**Your turn:** Write a function `loglik_mu` that computes the log-likelihood as a function of `mu`, assuming `sd = 1`. Then plot it over a sensible range of `mu` values, and add a vertical line at the sample mean.
+**Your turn:** The code below writes a log-likelihood function and plots it. The function `loglik_mu(mu)` computes the log-likelihood by summing up the log-densities of a Normal distribution with mean `mu` and sd = 1.
 
 ```{r bwt-loglik}
 ## Write your log-likelihood function here
@@ -114,13 +154,17 @@ legend("topright", legend = c("Log-likelihood", expression(hat(mu) == bar(x))),
        col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
 ```
 
-> **Think about it:** For a Normal distribution with known $\sigma$, what is the MLE for $\mu$? Does your plot confirm this?
+> **Think about it:** For a Normal distribution with known $\sigma$, the MLE for $\mu$ is always the sample mean $\bar{x}$. Does the peak of your plot confirm this?
 
 ------------------------------------------------------------------------
 
 ## (b) Seed Germination Data
 
-The following data are the number of seeds germinating out of 20 seeds, across 5 independent batches. We model each batch as $Y_i \sim \text{Binomial}(20, p)$ where $p$ is the unknown germination probability.
+### The scenario
+
+We planted **5 batches** of **20 seeds each** and counted how many seeds germinated in each batch. We want to estimate the **germination probability** $p$ — i.e., the chance that any individual seed will germinate.
+
+Each batch is modelled as $Y_i \sim \text{Binomial}(20, p)$, which means: "out of 20 seeds, each with probability $p$ of germinating, how many actually germinate?"
 
 ```{r seed-data, echo=FALSE, eval=TRUE}
 set.seed(12345)
@@ -128,13 +172,15 @@ y <- rbinom(5, 20, p = 0.65)
 print(y)
 ```
 
-The log-likelihood for $p$ is:
+### The log-likelihood
 
 $$
 \ell(p) = \sum_{i=1}^n \left[ \log \binom{20}{y_i} + y_i \log(p) + (20 - y_i)\log(1-p) \right]
 $$
 
-**Your turn:** Write a function `loglik_p` that computes the log-likelihood as a function of `p`. Plot it over $p \in (0, 1)$.
+Again, R's `dbinom(..., log = TRUE)` handles all of this for us.
+
+**Your turn:** The code below plots the log-likelihood for $p$ between 0 and 1. The peak tells us the most likely germination probability.
 
 ```{r seed-loglik}
 ## Write your log-likelihood function here
@@ -154,13 +200,17 @@ legend("topright", legend = c("Log-likelihood", expression(hat(p) == bar(y)/20))
        col = c("steelblue", "tomato"), lty = c(1, 2), lwd = 2)
 ```
 
-> **Think about it:** The MLE for a Binomial probability is $\hat{p} = \bar{y}/n$ where $n$ is the number of trials. What value does that give here? Add it as a vertical line to your plot to check.
+> **Think about it:** For the Binomial distribution, the MLE is $\hat{p} = \frac{\text{total successes}}{\text{total trials}} = \frac{\sum y_i}{5 \times 20}$. This is just the overall proportion of seeds that germinated. Does the red line match the peak?
 
 ------------------------------------------------------------------------
 
 ## (c) Extension: Exponential Waiting Times *(optional challenge)*
 
-Suppose we observe the following waiting times (in minutes) between events:
+### The scenario
+
+Suppose we're timing how long (in minutes) we wait between events — like customers arriving at a coffee shop. The **Exponential distribution** is the standard model for this kind of "time between events" data.
+
+The Exponential has one parameter: the **rate** $\lambda$ (lambda), which is the average number of events per unit time. Its density is $f(x \mid \lambda) = \lambda e^{-\lambda x}$ for $x > 0$.
 
 ```{r waiting-times}
 set.seed(99)
@@ -168,9 +218,7 @@ w <- rexp(30, rate = 0.4)
 round(w, 2)
 ```
 
-The Exponential distribution has density $f(x \mid \lambda) = \lambda e^{-\lambda x}$ for $x > 0$, where $\lambda$ is the rate parameter.
-
-**Your turn:** Write a log-likelihood function for $\lambda$ and plot it. What is the analytical MLE for $\lambda$ under an Exponential model?
+**Your turn:** Write a log-likelihood for $\lambda$ and plot it. The **analytical MLE** for the Exponential rate is $\hat{\lambda} = \frac{1}{\bar{x}}$ (one divided by the sample mean).
 
 ```{r exp-loglik}
 ## Write your log-likelihood function here
@@ -194,7 +242,9 @@ legend("topright", legend = c("Log-likelihood", expression(hat(lambda) == 1/bar(
 
 # 2. Interlude: Likelihood Surfaces
 
-So far we have only considered models with a single unknown parameter. When there are two unknown parameters, the log-likelihood becomes a **surface** over a 2D parameter space.
+## What happens when there are TWO unknown parameters?
+
+So far, every model had just **one** unknown parameter (λ, μ, or p), so the log-likelihood was a **curve** (a 2D plot). But what if we don't know *both* the mean AND the standard deviation? Then the log-likelihood becomes a **surface** over a 2D grid — like a mountain landscape where we're looking for the highest peak.
 
 For example, if $X_i \sim N(\mu, \sigma^2)$ with both $\mu$ and $\sigma$ unknown, the log-likelihood is:
 
@@ -202,7 +252,7 @@ $$
 \ell(\mu, \sigma) = -n\log(\sigma) - \frac{1}{2\sigma^2}\sum_{i=1}^n (x_i - \mu)^2 + \text{const}
 $$
 
-Here is an example using the full `birthwt` smoker data, treating both $\mu$ and $\sigma$ as unknown:
+Here we **visualise** this surface using a contour plot (like a topographic map — each coloured band represents a different "altitude" of log-likelihood):
 
 ```{r likelihood-surface, fig.width=7, fig.height=5}
 loglik_2d <- function(mu, sigma) {
@@ -221,13 +271,20 @@ filled.contour(mu_vals, sigma_vals, ll_surface,
                color.palette = function(n) hcl.colors(n, "YlOrRd", rev = TRUE))
 ```
 
-> **Observe:** The MLE occurs at the peak (darkest region). The elongated shape of the contours tells us something about how $\mu$ and $\sigma$ are related in terms of their uncertainty — this is the beginning of the idea of **confidence regions**.
+> **What to notice:**
+>
+> - The **darkest region** is where the log-likelihood is highest — that's where the MLE lives.
+> - The **shape of the contours** (elongated? circular?) tells us about the **relationship** between uncertainty in $\mu$ and uncertainty in $\sigma$. This is a preview of the idea of **confidence regions** — zones where the true parameter is likely to be.
 
 ------------------------------------------------------------------------
 
 # 3. Fun with Derivatives
 
-Finding the MLE analytically means taking the derivative of $\ell(\theta)$ with respect to $\theta$ and setting it to zero. R can compute symbolic derivatives using the `D()` function, which takes an `expression()` and the name of the variable to differentiate with respect to.
+## Why do we need derivatives?
+
+To find the MLE *analytically* (i.e., with pen and paper), we take the **derivative** of the log-likelihood, set it equal to zero, and solve for the parameter. The derivative tells us the "slope" of the log-likelihood curve — at the peak, the slope is zero (flat).
+
+R has a built-in function `D()` that can compute **symbolic derivatives** — it takes a mathematical expression and tells you its derivative. This is handy for checking your pen-and-paper work!
 
 ## Worked Example
 
@@ -239,18 +296,24 @@ D(expression(log(t)), "t")
 D(expression(t^3 - 2*t), "t")
 ```
 
+**How to read the output:** R returns the derivative as an R expression. For example:
+- `D(expression(log(t)), "t")` returns `1/t` (because the derivative of $\log(t)$ is $\frac{1}{t}$).
+- `D(expression(t^3 - 2*t), "t")` returns `3 * t^2 - 2` (the power rule!).
+
 **Your turn:** Use `D()` to find the derivative of each of the following with respect to $t$.
 
 ------------------------------------------------------------------------
 
 ## (a) $a + bt + ct^2$
 
+This is a **quadratic** (parabola). What does its derivative look like?
+
 ```{r deriv-a}
 ## Find the derivative with respect to t
 D(expression(a + b*t + c*t^2), "t")
 ```
 
-> What type of function is the derivative? What does this tell you about the shape of the original function?
+> **What to notice:** The derivative is a **linear** function of $t$ (i.e., $b + 2ct$). This makes sense — the slope of a parabola changes at a constant rate. Setting it to zero and solving for $t$ gives $t = -b / (2c)$, which is the vertex (peak or valley) of the parabola.
 
 ------------------------------------------------------------------------
 
@@ -270,22 +333,26 @@ D(expression(exp(t^2)), "t")
 D(expression(t - log(t)), "t")
 ```
 
-> Set the derivative equal to zero and solve for $t$. What is the minimum of $t - \log(t)$?
+> **Your turn:** Set the derivative equal to zero and solve for $t$. The derivative is $1 - \frac{1}{t}$. Setting $1 - \frac{1}{t} = 0$ gives $t = 1$.
+
+We can also find this numerically using `uniroot()`, which searches for where a function equals zero:
 
 ```{r}
 ddt <- function(t) eval(expression(1-1/t))
 uniroot(ddt, interval = c(0.01, 10))$root
 ```
 
-The minimum of $t - \log(t)$ is when $t=1$, the above is using numerical methods and so has some "rounding" error
+The answer is $t = 1$. The tiny difference from exactly 1 is just floating-point rounding — numerical methods aren't perfectly exact, but they get extremely close.
 
 ------------------------------------------------------------------------
 
 ## (d) Extension: The Poisson Log-Likelihood *(optional)*
 
-The Poisson log-likelihood (ignoring constants) is $\ell(\lambda) = \bar{x} \cdot n \cdot \log(\lambda) - n\lambda$.
+The Poisson log-likelihood (ignoring constant terms that don't depend on $\lambda$) is:
 
-**Your turn:** Use `D()` (or by hand) to differentiate with respect to $\lambda$, set the result to zero, and confirm that $\hat{\lambda} = \bar{x}$.
+$$\ell(\lambda) = n\bar{x} \cdot \log(\lambda) - n\lambda$$
+
+**Your turn:** Differentiate with respect to $\lambda$, set the result to zero, and confirm that $\hat{\lambda} = \bar{x}$.
 
 ```{r deriv-d}
 ## Differentiate the Poisson log-likelihood with respect to lambda
@@ -294,27 +361,41 @@ ploglikD <- D(expression(xbar * n * log(lambda) - n * lambda), "lambda")
 ploglikD
 ```
 
-Uniroot will not solve for in general, so n and xbar would need to be set as numbers to solve this, but you should be able to solve this one by hand (I did it in lectures)
+### Solving by hand
 
-$\frac{n\bar{x}}{\lambda} - n = 0$
+R gives us the derivative: $\frac{n\bar{x}}{\lambda} - n$. Setting this to zero:
+
+$$\frac{n\bar{x}}{\lambda} - n = 0 \quad \Rightarrow \quad \frac{n\bar{x}}{\lambda} = n \quad \Rightarrow \quad \hat{\lambda} = \bar{x}$$
+
+> **Note:** `uniroot()` can't solve this symbolically (it needs actual numbers for $n$ and $\bar{x}$), but you can easily solve it by hand as shown above. This confirms that the Poisson MLE is the sample mean!
 
 ------------------------------------------------------------------------
 
 # 4. Numerical Maximum Likelihood with `mle()`
 
-While analytical MLEs are elegant, many realistic models don't have closed-form solutions. R's `mle()` function (from the `stats4` package) finds the MLE **numerically** by minimising the **negative** log-likelihood (equivalently, maximising the log-likelihood).
+## Why do we need numerical methods?
 
-## Key things `mle()` needs:
+So far, we've been lucky — the Poisson, Normal, and Binomial all have **closed-form MLEs** (we can solve for the answer with pen and paper). But many realistic models don't have neat formulas. In those cases, we need the computer to **search** for the peak of the log-likelihood numerically.
 
--   A function computing the **negative** log-likelihood
--   A `start` list: initial guesses for the parameters
--   `nobs`: the number of observations (used for information criteria like AIC/BIC)
+## How `mle()` works
+
+R's `mle()` function (from the `stats4` package) does this for us. Here's what it needs:
+
+| Argument | What it is | Why |
+|---|---|---|
+| **A function** | The **negative** log-likelihood | `mle()` uses a minimiser internally, so we flip the sign: minimising $-\ell$ is the same as maximising $\ell$ |
+| `start` | A list of **initial guesses** for the parameters | The algorithm needs a starting point to begin its search |
+| `nobs` | The number of observations | Used for calculating information criteria like AIC |
+
+> **Why "negative" log-likelihood?** It's a convention in R. The underlying algorithm (`optim()`) is designed to *minimise* functions. Minimising $-\ell(\theta)$ is mathematically identical to maximising $\ell(\theta)$.
 
 ```{r load-stats4}
 library(stats4)
 ```
 
 ## Worked Example: Horse Kick Data
+
+Let's redo the horse kick example, but now using `mle()` instead of finding the answer by hand:
 
 ```{r mle-poisson}
 x <- rep(0:4, c(109, 65, 22, 3, 1))
@@ -325,11 +406,22 @@ fit_pois <- mle(negloglik_pois, start = list(lambda = 1), nobs = length(x))
 summary(fit_pois)
 ```
 
-> **Reading the output:** The `Estimate` is the MLE $\hat{\lambda}$, and the `Std. Error` is the estimated standard error, derived from the curvature of the log-likelihood at its peak. Notice that the MLE matches $\bar{x}$ = `r round(mean(x), 4)`.
+### How to read the output
 
-## Convergence and details
+- **Estimate:** This is the MLE $\hat{\lambda}$ — the value of lambda that maximises the log-likelihood. It should match the sample mean $\bar{x}$ = `r round(mean(x), 4)`.
+- **Std. Error:** This tells you how "certain" we are about the estimate. A smaller standard error means more certainty. It's derived from the **curvature** of the log-likelihood at its peak — a sharply peaked curve means more precision.
 
-When you call mle(), the fitted object stores a lot of additional information beyond just the estimate and standard error. You can access this with [fit\@details], which returns the full output from the underlying optim() call. The most important thing to check here is fit\@details\$convergence — this is a numeric code where 0 means the algorithm converged successfully. Any non-zero value indicates a problem: for example, 1 means the iteration limit was hit before convergence, and 52 or 54 typically indicate numerical issues with the likelihood evaluation. It is good practice to always check this after fitting, because mle() will not throw an error or warning if the optimiser fails to converge — it will simply return whatever value of the parameter it ended up at, which may be nowhere near the true MLE. A model that hasn't converged can look perfectly reasonable on the surface, so fit\@details\$convergence == 0 is your first sanity check before trusting any estimates.
+## Always check convergence!
+
+When you call `mle()`, the fitted object stores detailed information about the optimisation process. You can access this with `fit@details`. **The most important thing to check** is the convergence code:
+
+| Code | Meaning |
+|---|---|
+| **0** | ✅ Success! The algorithm converged. |
+| **1** | ⚠️ Hit the iteration limit before converging. |
+| **52 or 54** | ❌ Numerical problems with the likelihood. |
+
+> **Warning:** `mle()` will **not** throw an error or warning if it fails to converge — it will just return whatever parameter value it ended up at, which could be completely wrong. **Always** check `fit@details$convergence == 0` before trusting your results!
 
 ```{r}
 fit_pois@details
@@ -339,7 +431,7 @@ fit_pois@details
 
 ## (a) MLE for Birth Weight (Normal, sd = 1)
 
-**Your turn:** Using the `loglik_mu` function you wrote in Question 1(a), compute the MLE for $\mu$. Remember to negate it.
+**Your turn:** Using the `loglik_mu` function you wrote in Section 1(a), compute the MLE for $\mu$ using `mle()`. Remember: `mle()` needs the **negative** log-likelihood, so we just negate it.
 
 ```{r mle-normal}
 ## Define the negative log-likelihood
@@ -351,13 +443,15 @@ summary(fit_mu)
 fit_mu@details
 ```
 
-> Does the MLE match the sample mean? Is this what you expected? Did it converge?
+> **Check:** Does the MLE match the sample mean? Did the convergence code equal 0? If yes to both, everything worked! ✅
 
 ------------------------------------------------------------------------
 
 ## (b) MLE for Seed Germination (Binomial)
 
-**Your turn:** Using the `loglik_p` function you wrote in Question 1(b), compute the MLE for `p`. You will need to constrain $p \in (0, 1)$ using the `method` and `lower`/`upper` arguments.
+**Your turn:** Using the `loglik_p` function from Section 1(b), compute the MLE for the germination probability $p$.
+
+**Special consideration:** The parameter $p$ must stay between 0 and 1 (it's a probability!). We use `method = "Brent"` with `lower` and `upper` bounds to enforce this constraint. The Brent method is specifically designed for **single-parameter bounded optimisation**.
 
 ```{r mle-binomial}
 ## Define the negative log-likelihood
@@ -372,13 +466,17 @@ summary(fit_p)
 cat("Analytic MLE p_hat = sum(y) / (5*20) =", sum(y) / (5 * 20), "\n")
 ```
 
-> Compare the MLE to $\sum y_i / (5 \times 20)$. Do they agree?
+> **Check:** The MLE from `mle()` should match $\frac{\sum y_i}{5 \times 20}$ (the total number of germinated seeds divided by the total number of seeds planted). Do they agree? ✅
 
 ------------------------------------------------------------------------
 
 ## (c) MLE for Birth Weight, sd unknown
 
-So far in Question 4(a) you fixed sd = 1 and only estimated μ. In reality we don't know σ either, so let's estimate both parameters simultaneously using mle(). This means our negative log-likelihood now takes two arguments, and mle() will search over a 2D parameter space — exactly the surface you visualised in Section 2.
+### Making it more realistic
+
+In Section 4(a), we assumed we *knew* that $\sigma = 1$. In real life, we almost never know the standard deviation in advance. So now let's estimate **both** $\mu$ AND $\sigma$ at the same time.
+
+This means our negative log-likelihood takes **two arguments**, and `mle()` will search over a **2D parameter space** — exactly the surface you visualised in Section 2.
 
 ```{r mle-both}
 negloglik_both <- function(mu, sigma) {
@@ -395,37 +493,63 @@ cat("Sample mean:", round(mean(bwt_smokers), 4), "\n")
 cat("Sample sd:  ", round(sd(bwt_smokers), 4), "\n")
 ```
 
-You should notice a slight differnce between $\sigma$ estimated from MLE and the sample SD. Due to Bessel's correction as mentioned in the lecture
+### Why doesn't $\hat{\sigma}$ exactly match `sd()`?
+
+You'll notice a small difference between the MLE for $\sigma$ and R's `sd()` function. This is because:
+
+- **MLE** divides by $n$ (the sample size).
+- **`sd()` in R** divides by $n - 1$ (this is called **Bessel's correction**, which gives a less biased estimate for small samples).
+
+The difference shrinks as the sample gets larger, and for practical purposes they're very close.
 
 ------------------------------------------------------------------------
 
 # 5. Optimisation Methods
 
-So far, `mle()` has been doing the hard work for us. Under the hood, it calls R's general-purpose `optim()` function, which supports several different numerical optimisation algorithms. Understanding these methods — and their trade-offs — is important when likelihood surfaces are irregular or high-dimensional.
+## What's happening "under the hood"?
 
-All of these algorithms are trying to solve the same problem: find the value of $\theta$ that minimises (or maximises) some objective function $f(\theta)$. They differ in *how* they use information about $f$ to navigate the parameter space.
+When you call `mle()`, it uses R's general-purpose optimisation function `optim()` to search for the peak of the log-likelihood. But *how* does `optim()` search? There are several different strategies (called **algorithms**), each with pros and cons.
 
-## Overview of Key Methods
+Think of it like searching for the highest point on a mountain in dense fog:
 
-**Nelder-Mead** is the default method in `optim()`. It is a *derivative-free* method that works by maintaining a geometric shape (a "simplex") in parameter space and iteratively reflecting, expanding, or contracting it toward the optimum. Because it does not require any gradient information it is robust and easy to use, but can be slow to converge and may struggle in high dimensions.
+| Method | Analogy | How it works |
+|---|---|---|
+| **Nelder-Mead** | Wander around and keep track of which directions went uphill | Doesn't need to know the slope (derivative-free). Robust but slow. |
+| **BFGS** | Use a compass *and* read the slope of the ground under your feet | Uses gradient (slope) information to take smart steps. Fast and efficient. |
+| **Gradient Ascent** | Always walk in the steepest uphill direction, one small step at a time | The simplest method. Easy to understand but can be slow. |
 
-**BFGS** (Broyden–Fletcher–Goldfarb–Shanno) is a *quasi-Newton* method. Newton's method uses both the gradient (first derivative) and the Hessian (second derivative matrix) to take well-informed steps toward the optimum. BFGS approximates the Hessian from successive gradient evaluations, avoiding the cost of computing it exactly. It is generally much faster than Nelder-Mead when the log-likelihood is smooth.
+### More detail on each method
 
-**Gradient Ascent** is the simplest iterative method. At each step we move in the direction of the gradient by a fixed step size $\gamma$ (the *learning rate*):
+**Nelder-Mead** (the default in `optim()`):
+
+- Creates a geometric shape (called a "simplex") in parameter space and moves it around — reflecting, expanding, or shrinking it — to home in on the peak.
+- **Pros:** No derivatives needed. Very robust (hard to break).
+- **Cons:** Can be slow, especially with many parameters.
+
+**BFGS** (Broyden–Fletcher–Goldfarb–Shanno):
+
+- A "quasi-Newton" method. Newton's method uses the gradient (first derivative) AND the Hessian (second derivative) to make very smart decisions about where to step next. BFGS *approximates* the Hessian from past gradient calculations, saving computation.
+- **Pros:** Much faster than Nelder-Mead on smooth problems.
+- **Cons:** Needs the log-likelihood to be smooth (no sudden jumps or flat spots).
+
+**Gradient Ascent** (the DIY method):
+
+- At each step, compute the slope (gradient) and take a small step uphill. The step size $\gamma$ is called the **learning rate**:
 
 $$
 \theta^{(t+1)} = \theta^{(t)} + \gamma \cdot \frac{\partial \ell}{\partial \theta}\bigg|_{\theta^{(t)}}
 $$
 
-It is intuitive and easy to implement by hand, but it is sensitive to the choice of $\gamma$ and can be slow near flat regions of the likelihood.
+- **Pros:** Very simple and easy to implement by hand.
+- **Cons:** Sensitive to the learning rate $\gamma$. Too big → overshoot and oscillate. Too small → painfully slow.
 
-## MLE
+### What does `mle()` use?
 
-Note that mle() uses BFGS (or its memory-efficient variant L-BFGS-B, which is used when parameter bounds are supplied) under the hood by default — so when you called mle() in Section 4, you were already using a quasi-Newton method without knowing it. It is instructive to try the other methods directly using optim() and compare their behaviour.
+`mle()` uses **BFGS** by default (or its memory-efficient cousin **L-BFGS-B** when you supply parameter bounds). So every time you called `mle()` in Section 4, you were already using a quasi-Newton method!
 
 ## Worked Example: Comparing Methods on the Horse Kick Data
 
-Here we compare Nelder-Mead and BFGS using `optim()` directly, then implement gradient ascent by hand.
+Here we use `optim()` directly (instead of `mle()`) to see the difference between Nelder-Mead and BFGS. Then we implement gradient ascent by hand.
 
 ```{r optim-compare}
 x <- rep(0:4, c(109, 65, 22, 3, 1))
@@ -441,6 +565,13 @@ cat("Nelder-Mead estimate:", round(fit_nm$par, 6),   "  Iterations:", fit_nm$cou
 cat("BFGS estimate:       ", round(fit_bfgs$par, 6), "  Iterations:", fit_bfgs$counts[1], "\n")
 cat("True MLE (mean x):   ", round(mean(x), 6), "\n")
 ```
+
+### Gradient Ascent by hand
+
+Now let's implement gradient ascent ourselves. For the Poisson log-likelihood:
+
+- The derivative (gradient) is: $\frac{\partial \ell}{\partial \lambda} = \frac{\sum x_i}{\lambda} - n$
+- At each iteration, we update: $\lambda_{\text{new}} = \lambda_{\text{old}} + \gamma \times \text{gradient}$
 
 ```{r gradient-ascent-poisson}
 # Gradient ascent by hand for the Poisson log-likelihood.
@@ -467,11 +598,15 @@ legend("bottomright", legend = c("Gradient ascent", expression(hat(lambda) == ba
 cat("Gradient ascent estimate after", n_iter, "iterations:", round(lambda, 6), "\n")
 ```
 
-> **Observe:** Gradient ascent converges to the correct answer but requires many more iterations than BFGS. Try changing the learning rate to `0.01` or `0.0001` and see what happens.
+> **What to notice:** Gradient ascent eventually reaches the correct answer, but it takes **many more iterations** than BFGS. Try changing the learning rate:
+>
+> - `gamma = 0.01` → Faster convergence (bigger steps)
+> - `gamma = 0.0001` → Slower convergence (tinier steps)
+> - `gamma = 0.1` → Might overshoot and oscillate!
 
-## Birthwt
+## Your turn: Comparing Methods on Birth Weight Data
 
-Your turn: Using the bwt_smokers data from Question 1(a), fit the Normal log-likelihood (with sd = 1) using optim() with each of the three methods: "Nelder-Mead", "BFGS", and "L-BFGS-B". For "L-BFGS-B" you will need to supply a lower bound since μ must be positive for birth weights. Compare the estimates, the number of function evaluations ( counts), and the convergence codes (convergence) across the three methods. Which converges fastest? Do they all agree on the estimate?
+Using the `bwt_smokers` data from Section 1(a), fit the Normal log-likelihood (with sd = 1) using `optim()` with three different methods. Compare which converges fastest and whether they all agree on the answer.
 
 ```{r optim-birthwt}
 negloglik_mu <- function(mu) -loglik_mu(mu)
@@ -501,23 +636,38 @@ cat("Sample mean (true MLE):", round(mean(bwt_smokers), 6), "\n")
 
 # 6. MLE for the Gamma Distribution via Gradient Ascent
 
-The Gamma distribution is commonly used to model positive, right-skewed data such as waiting times, rainfall totals, and insurance claims. Its density is:
+## Why is this section special?
+
+The **Gamma distribution** is our first example of a model where there is **no closed-form MLE** — you *cannot* solve for the answer with pen and paper. This is why numerical methods (like gradient ascent and `mle()`) are essential in practice.
+
+### What is the Gamma distribution?
+
+The Gamma distribution is used to model **positive, right-skewed data** — things like waiting times, rainfall amounts, and insurance claims. Its density is:
 
 $$
 f(x \mid \alpha, \beta) = \frac{\beta^\alpha}{\Gamma(\alpha)} x^{\alpha - 1} e^{-\beta x}, \quad x > 0
 $$
 
-where $\alpha > 0$ is the **shape** parameter and $\beta > 0$ is the **rate** parameter. The shape parameter $\alpha$ does not have a closed-form MLE — this is a case where numerical methods are essential.
+where:
 
-The log-likelihood for $\alpha$ alone (with $\beta$ replaced by its MLE $\hat{\beta} = \alpha / \bar{x}$, which *does* have a closed form) simplifies so that its derivative is:
+- $\alpha > 0$ is the **shape** parameter (controls the curve's shape — small $\alpha$ = very skewed, large $\alpha$ = more symmetric)
+- $\beta > 0$ is the **rate** parameter (controls how stretched out the distribution is)
+
+### The tricky part
+
+While $\beta$ does have a closed-form MLE ($\hat{\beta} = \alpha / \bar{x}$), the shape parameter $\alpha$ does **not**. Its log-likelihood involves the **Gamma function** $\Gamma(\alpha)$, which doesn't have a nice inverse. So we need numerical methods!
+
+### The gradient for $\alpha$
+
+If we plug in $\hat{\beta} = \alpha / \bar{x}$ (the closed-form MLE for $\beta$), we can write the derivative of the log-likelihood with respect to $\alpha$ as:
 
 $$
-\frac{\partial \ell(\alpha)}{\partial \alpha} = n\log\alpha - n\log\bar{x} - n\frac{\partial}{\partial\alpha}\log\Gamma(\alpha) + \sum_{i=1}^n \log(x_i)
+\frac{\partial \ell(\alpha)}{\partial \alpha} = n\log\alpha - n\log\bar{x} - n \cdot \psi(\alpha) + \sum_{i=1}^n \log(x_i)
 $$
 
-R provides `digamma(alpha)` to evaluate $\frac{\partial}{\partial\alpha}\log\Gamma(\alpha)$.
+where $\psi(\alpha)$ is the **digamma function** — the derivative of $\log\Gamma(\alpha)$. R provides this as `digamma(alpha)`.
 
-Our observed sample is:
+### Our data
 
 ```{r gamma-data}
 x_gamma <- c(67.98, 61, 49.82)
@@ -526,7 +676,13 @@ cat("Sample mean:", round(mean(x_gamma), 4), "\n")
 cat("Sum of log(x):", round(sum(log(x_gamma)), 4), "\n")
 ```
 
-**Your turn:** Write a function `grad_gamma` that computes $\frac{\partial \ell(\alpha)}{\partial \alpha}$ for a given value of `alpha`. Then implement gradient ascent with learning rate $\gamma = 0.1$ to find the MLE $\hat{\alpha}$.
+### Gradient ascent for $\alpha$
+
+**Your turn:** The code below implements gradient ascent. It:
+
+1. Computes the gradient (slope) of the log-likelihood at the current $\alpha$.
+2. Takes a small step in the uphill direction: $\alpha_{\text{new}} = \alpha_{\text{old}} + \gamma \times \text{gradient}$.
+3. Repeats until the changes become negligibly small.
 
 ```{r gamma-gradient-ascent}
 gradient <- function(alpha, sample) {
@@ -561,7 +717,15 @@ plot(result$trace, type = "l", col = "steelblue", lwd = 2,
 abline(h = result$alpha, col = "tomato", lty = 2, lwd = 2)
 ```
 
-> **Hint:** A reasonable starting value might be $\alpha = 1$ or $\alpha = 5$. If your trace looks unstable, try reducing the learning rate.
+> **Tips:**
+>
+> - A reasonable starting value might be $\alpha = 1$ or $\alpha = 5$.
+> - If your trace plot looks unstable (oscillating wildly), **reduce the learning rate** (e.g., try `step = 0.01` instead of `0.1`).
+> - If it's converging very slowly, try a **larger learning rate**.
+
+### Verifying with `mle()`
+
+Now let's double-check our gradient ascent answer using `mle()`. This time we estimate **both** $\alpha$ and $\beta$ simultaneously:
 
 ```{r gamma-mle-verify}
 negloglik_gamma <- function(alpha, beta) {
@@ -573,7 +737,7 @@ fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
                  nobs = length(x_gamma))
 ```
 
-**Your turn (extension):** Verify your gradient ascent answer using `mle()`. dgamma will give the usual way of getting the log-likelihood
+**Your turn (extension):** The function above uses `dgamma()` to compute the log-likelihood — this is the standard way, and much simpler than writing out the formula by hand.
 
 ```{r gamma-optim-verify}
 # negloglik_gamma <- function(alpha, beta) {
@@ -581,7 +745,7 @@ fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
 # }
 ```
 
-Now let's do the fit
+Now let's fit the model and see the results:
 
 ```{r gamma-mle-fit}
 fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
@@ -589,14 +753,18 @@ fit_gamma <- mle(negloglik_gamma, start = list(alpha = 1, beta = 1),
 summary(fit_gamma)
 ```
 
-Does it converge? Check
+### Did it converge?
+
+Remember: **always check convergence!** A convergence code of 0 means success.
 
 ```{r gamma-convergence-check}
 fit_gamma@details$convergence
 cat("Convergence code 0 = success, non-zero = problem.\n")
 ```
 
-We might need to keep going until it converges - fill in the missing below
+### What if it didn't converge?
+
+Sometimes the algorithm doesn't converge on the first try (especially with tricky distributions like the Gamma). The fix is to **restart from where it left off** and run again. The `while` loop below keeps retrying until it converges:
 
 ```{r gamma-convergence-loop}
 while (fit_gamma@details$convergence != 0) {
@@ -606,3 +774,22 @@ while (fit_gamma@details$convergence != 0) {
 cat("Final convergence code:", fit_gamma@details$convergence, "\n")
 summary(fit_gamma)
 ```
+
+> **What's happening here:** Each time the loop runs, it uses the *previous* estimates as the new starting point (`start = as.list(coef(fit_gamma))`). This often helps because the algorithm is now starting from a much better position, making it easier to converge.
+
+------------------------------------------------------------------------
+
+# Quick Reference: Key Concepts
+
+| Term | Plain English |
+|---|---|
+| **Likelihood** $L(\theta)$ | "How plausible is this parameter value, given my data?" |
+| **Log-likelihood** $\ell(\theta)$ | Same thing, but on a log scale (easier for computers) |
+| **MLE** $\hat{\theta}$ | The parameter value that makes the data most plausible |
+| **`mle()`** | R function that finds the MLE numerically |
+| **`optim()`** | The engine under the hood — general-purpose optimiser |
+| **Nelder-Mead** | Slow but robust (no derivatives needed) |
+| **BFGS** | Fast and smart (uses gradient information) |
+| **Gradient Ascent** | Simplest method — walk uphill step by step |
+| **Convergence** | Did the algorithm successfully find the peak? (Check `code == 0`) |
+| **Bessel's correction** | Why `sd()` divides by $n-1$ instead of $n$ |
