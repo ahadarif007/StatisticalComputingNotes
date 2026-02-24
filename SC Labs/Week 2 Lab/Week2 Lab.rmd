@@ -3,42 +3,54 @@ title: "Week 2 Lab"
 output:
   html_document:
     df_print: paged
-header-includes:
-- \usepackage{libertine}
-- \usepackage[scaled=0.83]{beramono}
 editor_options: 
   markdown: 
     wrap: 72
 ---
 
-You should verify all results using R, even if you compute them
-analytically first.
+> **What this lab covers:** Probability distributions, the Central Limit
+> Theorem, Normal distribution calculations, Poisson problems, Bayes'
+> Theorem, and conditional probability. All of these are foundational
+> concepts you'll use throughout the module.
 
-# Probability
+# 1. Probability — Card Drawing
 
-1.  A \textit{Magic the Gathering} deck of cards contains 60 cards; 20
-    of the cards are land cards and the remaining 40 cards are non-land
-    cards. If I draw seven cards from the deck at random, what is the
-    probability that I get: Use R to compute all probabilities
-    numerically. You may use `dhyper()` and `phyper()`.
+## The scenario
 
-    -   three land cards?
-    -   more than three land cards?
-    -   between two and four land cards?
+Imagine you have a **Magic: The Gathering** deck of **60 cards**:
 
-    What is the expected number of land cards when I draw seven cards at
-    random?
+- **20** are "land" cards
+- **40** are non-land cards
 
-    For this you need to think about what type of distribution it is.
-    You can use Wikipedia. Compared to the lecture notes, it sounds like
-    it is Binomial Distribution, but this is NOT the case. Binomial
-    Distribution is every experiment is independent, this example is not
-    as when you draw one card it changes the probability of the next
-    one.
+You draw **7 cards** at random (like dealing a hand). We want to know
+the probability of getting various numbers of land cards.
 
-    This situation is not binomial, because the draws are not
-    independent. The appropriate model is the hypergeometric
-    distribution.
+## Why is this NOT a Binomial distribution?
+
+You might think: "Each card is either land or not-land, so it's
+Binomial!" But there's a catch:
+
+- **Binomial** requires each draw to be **independent** — the
+  probability of drawing a land card must stay the same every time.
+- But here we're drawing **without replacement** — once you draw a
+  card, it's gone from the deck. So drawing one card *changes* the
+  probability for the next draw.
+
+This situation uses the **Hypergeometric distribution** instead. Think
+of it as "the Binomial's cousin for sampling without replacement."
+
+## R functions for the Hypergeometric distribution
+
+| Function | What it gives you |
+|---|---|
+| `dhyper(x, m, n, k)` | P(exactly x successes) — the probability of drawing exactly `x` land cards |
+| `phyper(q, m, n, k)` | P(X ≤ q) — the cumulative probability (at most `q` land cards) |
+
+Where:
+
+- `m` = number of "success" items in the population (**20** land cards)
+- `n` = number of "failure" items (**40** non-land cards)
+- `k` = number of draws (**7** cards)
 
 ```{r hypergeometric}
 # Hypergeometric distribution: 60 cards total, 20 land, 40 non-land, draw 7
@@ -64,23 +76,45 @@ expected_land <- 7 * 20 / 60
 cat("Expected number of land cards =", expected_land, "\n")
 ```
 
-**Interpretation:** This is a hypergeometric distribution because draws
-are without replacement — drawing one card changes the probability of
-drawing a land card next. The expected number of land cards in a hand of
-7 is 7 × (20/60) = 7/3 ≈ 2.33.
+### How to interpret the results
 
-2.  The birthday problem is a famous problem in probability, in which we
-    calculate how many people we would need to gather in a room before
-    there is at least a $0.5$ probability that at least two of these
-    people share a birthday. We assume that birthdays are uniformly
-    distributed across the year, and that all birthdays are independent
-    (i.e. no twins). Use `R` to calculate the probability for a room
-    with $n$ people and plot the probabilities for various values of
-    $n$. Use a reference line to show $p = 0.5$ on your plot. Choose
-    sensible limits for the $x$ and $y$ axes.
+- **P(exactly 3 land):** The most common outcome — you'll get exactly 3
+  lands in about 26% of hands.
+- **P(more than 3 land):** About 17% of the time you'll "flood" with
+  too many lands.
+- **P(between 2 and 4 land):** The "sweet spot" — about 74% of hands
+  will give you a reasonable number of lands.
+- **Expected value:** On average, you'll draw 7 × (20/60) ≈ **2.33**
+  land cards per hand.
 
-Write a function that computes the probability for a given n. Use R to
-generate the plot.
+---
+
+# 2. The Birthday Problem
+
+## The scenario
+
+How many people do you need in a room before there's a **50% chance**
+that at least two of them share a birthday? Most people guess 100 or
+more — the real answer is shockingly low!
+
+## The key insight
+
+It's easier to calculate the probability that **everyone** has a
+*different* birthday, and then subtract from 1:
+
+$$P(\text{at least one shared birthday}) = 1 - P(\text{all different})$$
+
+For $N$ people and 365 possible birthdays:
+
+- Person 1 can have any birthday: $\frac{365}{365}$
+- Person 2 must differ from person 1: $\frac{364}{365}$
+- Person 3 must differ from persons 1 & 2: $\frac{363}{365}$
+- ...and so on.
+
+So: $P(\text{all different}) = \frac{365}{365} \times \frac{364}{365}
+\times \frac{363}{365} \times \ldots$
+
+The code below computes this recursively:
 
 ```{r birthday_problem}
 # Function to compute the probability that ALL n people have DIFFERENT birthdays
@@ -118,39 +152,59 @@ legend("bottomright",
        lty = c(1, 2, 3), lwd = 2)
 ```
 
-**Finding:** In a room of just **23 people**, the probability that at
-least two of them share a birthday exceeds 0.5. This is a
-counter-intuitive result — most people would guess a much higher number.
+### The surprising answer
 
-# Random Variables
+With just **23 people** in a room, the probability of a shared birthday
+exceeds 50%! This feels wrong because we intuitively think about the
+chance of someone sharing *our* birthday (which is low). But the
+question is about *any* pair — and with 23 people there are
+$\binom{23}{2} = 253$ possible pairs, so the chances add up quickly.
 
-Given the following random variables, use Wikipedia to find the expected
-value and variance. Make sure to describe what the expected value means
-for each distribution.
+---
 
--   $X$ is Binomial, with number of trials $n = 12$ and probability of
-    success $p = 0.2$
--   $A$ is Normal, with mean $\mu = 10$ and standard deviation
-    $\sigma = 5$.
--   $B$ is Poisson with rate $\lambda = 4.5$.
+# 3. Random Variables — Expected Value and Variance
 
-**Binomial $X \sim B(n=12, p=0.2)$:**
+## What is a random variable?
 
-- $E[X] = np = 12 \times 0.2 = 2.4$
+A **random variable** is a quantity whose value depends on a random
+process. For example, "the number of heads in 12 coin flips" is a
+random variable.
+
+Every random variable has two key properties:
+
+- **Expected value** $E[X]$ — the long-run average (what you'd get if
+  you repeated the experiment millions of times).
+- **Variance** $\text{Var}(X)$ — how spread out the values are around
+  the expected value.
+
+## Three common distributions
+
+### Binomial: $X \sim B(n=12, p=0.2)$
+
+**What it models:** The number of successes in $n$ independent trials,
+each with probability $p$ of success. Example: "Out of 12 coin flips
+(with a biased coin that lands heads 20% of the time), how many heads?"
+
+- $E[X] = np = 12 \times 0.2 = 2.4$ — On average, 2.4 successes out
+  of 12 trials.
 - $\text{Var}(X) = np(1-p) = 12 \times 0.2 \times 0.8 = 1.92$
-- **Interpretation:** On average, we expect 2.4 successes out of 12 trials.
 
-**Normal $A \sim N(\mu=10, \sigma=5)$:**
+### Normal: $A \sim N(\mu=10, \sigma=5)$
 
-- $E[A] = \mu = 10$
+**What it models:** Continuous data that forms a bell curve. Example:
+heights, test scores, measurement errors.
+
+- $E[A] = \mu = 10$ — The centre of the bell curve.
 - $\text{Var}(A) = \sigma^2 = 25$
-- **Interpretation:** The average value of $A$ is 10.
 
-**Poisson $B \sim \text{Pois}(\lambda=4.5)$:**
+### Poisson: $B \sim \text{Pois}(\lambda=4.5)$
 
-- $E[B] = \lambda = 4.5$
-- $\text{Var}(B) = \lambda = 4.5$
-- **Interpretation:** On average, 4.5 events occur per unit of time/space.
+**What it models:** The number of events in a fixed interval of time or
+space. Example: "How many emails do I get per hour?"
+
+- $E[B] = \lambda = 4.5$ — On average, 4.5 events per interval.
+- $\text{Var}(B) = \lambda = 4.5$ — (For Poisson, the variance always
+  equals the mean!)
 
 ```{r random_variables}
 # Verify computations in R
@@ -164,22 +218,30 @@ lambda <- 4.5
 cat("Poisson E[B] =", lambda, "  Var(B) =", lambda, "\n")
 ```
 
-# Poisson approximation to binomial
+---
 
-Suppose that the Binomial distribution with parameters $n$ and $p$ is an
-appropriate model for a random variable $X$. If $n \ge 20$ and
-$p \le 0.05$, it can be shown that Poisson distribution can be used
-instead, as a good approximation, to work out probabilities about X.
+# 4. Poisson Approximation to the Binomial
 
-The approximation is excellent if $n \ge 100$ and $np \le 10$.
+## The big idea
 
-Suppose that 1% of screws produced in a factory are defective. If 100
-screws are selected at random, what is the (a) exact and (b) approximate
-probability that 5 of them will be defective.
+Sometimes we have a **Binomial** situation, but the number of trials
+$n$ is large and the probability $p$ is small. In this case, the
+Binomial is well-approximated by a **Poisson** distribution with
+$\lambda = np$. This is useful because Poisson calculations can be
+simpler.
 
-1.  Back to our binomial distribution function
-    $P(X = x) = {n \choose x}p^x(1-p)^{n-x}$, go and calculate
-    $P(X = 5)$, use the built in tools.
+**Rule of thumb:**
+
+- Good approximation if $n \geq 20$ and $p \leq 0.05$
+- Excellent approximation if $n \geq 100$ and $np \leq 10$
+
+## Example: Defective screws
+
+A factory produces screws, and **1% are defective** ($p = 0.01$). We
+randomly select $n = 100$ screws. What's the probability that exactly
+**5** are defective?
+
+### Step 1: Exact answer using the Binomial
 
 ```{r binomial_exact}
 # Exact probability using the Binomial distribution
@@ -188,14 +250,11 @@ p_exact <- dbinom(5, size = 100, prob = 0.01)
 cat("Exact P(X = 5) using Binomial =", p_exact, "\n")
 ```
 
-For binomial we have said the $\mu = E(X) = np$ which in this particular
-case is $(0.01)(100) = 1$\\
+### Step 2: Approximate answer using the Poisson
 
-For the Poisson distribution the $E(X) = \alpha t$. Putting them
-together we get an approximation for $\alpha t = 1$. We can now
-calculate $P(X=x) = e^{-\alpha t}\frac{(\alpha t)^{x}}{x!}$.
-
-2.  Find $P(X = 5)$ for Poisson
+For the Binomial, the expected number of defectives is
+$\mu = np = 100 \times 0.01 = 1$. We use this as our Poisson rate
+$\lambda = 1$:
 
 ```{r poisson_approx}
 # Approximate probability using the Poisson distribution
@@ -210,48 +269,67 @@ cat("  Poisson (approx):  ", dpois(5, 1), "\n")
 cat("  Difference:        ", abs(dbinom(5, 100, 0.01) - dpois(5, 1)), "\n")
 ```
 
-**Are they close?** Yes! The Poisson approximation (≈ 0.003066) is very
-close to the exact binomial probability (≈ 0.002898). The small
-difference confirms the rule: with $n = 100 \ge 100$ and
-$np = 1 \le 10$, the Poisson approximation is excellent.
+### Are they close?
 
-# Sampling Distribution - Central Limit Theorem
+Yes! The Poisson approximation (≈ 0.003066) is very close to the exact
+Binomial answer (≈ 0.002898). With $n = 100$ and $np = 1$, we're well
+within the "excellent approximation" zone.
 
-Let's try this in practice
+---
+
+# 5. Sampling Distribution — The Central Limit Theorem
+
+## What is the Central Limit Theorem (CLT)?
+
+The CLT is one of the most important results in all of statistics.
+Here's what it says in plain English:
+
+> **If you take many random samples from ANY distribution and compute
+> the mean of each sample, those means will follow a Normal (bell
+> curve) distribution — even if the original data is not Normal at
+> all!**
+
+Let's prove this to ourselves with a hands-on demonstration.
+
+### Step 1: Create a non-Normal population
+
+We generate 1,000,000 random numbers from a **Uniform distribution**
+(every number between 0 and 1 is equally likely). This is definitely
+NOT a bell curve — it's flat!
 
 ```{r}
 a <- runif(10^6)
 a
 ```
 
-Gives us a population of 1,000,000 random numbers. They are definitely
-not normally distributed as it was generated with \texttt{runif} which
-means they are uniformly distributed. Let's plot the histograms
-
 ```{r}
 hist(a, breaks = 20, main = "a", col = "lightblue")
 ```
 
-Also let's see the statistics
+> **What to see:** The histogram is **flat** — this is the Uniform
+> distribution. Every value between 0 and 1 is equally likely. There's
+> no peak, no bell shape.
 
 ```{r}
 cat("Population mean:", mean(a), "\n")
 cat("Standard deviation:", sd(a), "\n")
 ```
 
-From the population of 1,000,000 numbers, we are going to take 1000
-random samples of size 100.
+### Step 2: Take many random samples
+
+We take **1,000 random samples**, each containing **100 numbers**, from
+our population:
 
 ```{r}
 b <- replicate(1000, sample(a, 100, replace = FALSE))
 dim(b)
 ```
 
-\texttt{b[,1]} shows us one of these samples.
+> **What `dim(b)` tells us:** The result is a 100 × 1000 matrix — each
+> **column** is one sample of 100 numbers. So `b[,1]` is the first
+> sample, `b[,2]` is the second, etc.
 
-We now want the mean of each of these samples, so we want the mean of
-the columns, I would like there to be a function that does that! Call
-all these samplemeans sampleMean
+### Step 3: Compute the mean of each sample
 
 ```{r}
 # colMeans() computes the mean of each column (each sample)
@@ -259,51 +337,60 @@ sampleMean <- colMeans(b)
 cat("Number of sample means:", length(sampleMean), "\n")
 ```
 
-Now plot a histogram of sampleMean set.
+### Step 4: Plot the sample means — it looks Normal!
 
 ```{r}
 hist(sampleMean, breaks = 20, main = "SampleMean", col = "lightblue",
      xlab = "Sample Mean", ylab = "Frequency")
 ```
 
-Looks normal
+> **The magic of the CLT:** Even though our original data was
+> **flat/uniform**, the distribution of sample means is **bell-shaped**!
+> This is exactly what the CLT predicts.
 
-What are the sample means and standard deviation of the sampleMeans
+### Step 5: Check the numbers
+
+The CLT also tells us the **spread** of the sampling distribution:
+
+$$\text{SD of sample means} = \frac{\sigma_{\text{population}}}
+{\sqrt{n}}$$
+
+where $n$ is the sample size (100 in our case).
 
 ```{r}
 cat("Mean of sampleMean:", mean(sampleMean), "\n")
 cat("Standard deviation of sampleMean:", sd(sampleMean), "\n")
 ```
 
-Sample mean quite close to population mean. SD of sample is quite close
-to SD of the population divided by $\sqrt{n}$
-
-**Verification:** The theoretical SD of the sampling distribution =
-$\frac{\sigma_{population}}{\sqrt{n}} = \frac{\text{sd}(a)}{\sqrt{100}}$.
-
 ```{r}
 cat("Theoretical SD of sampling distribution:", sd(a) / sqrt(100), "\n")
 cat("Observed SD of sampleMean:              ", sd(sampleMean), "\n")
 ```
 
-This confirms the Central Limit Theorem: regardless of the original
-distribution (here, uniform), the sampling distribution of the mean is
-approximately normal with mean equal to the population mean and standard
-deviation equal to $\sigma / \sqrt{n}$.
+> **Confirmed!** The mean of the sample means is very close to the
+> population mean, and the SD of the sample means matches
+> $\sigma / \sqrt{n}$. The CLT works!
 
-# Plotting expected values
+---
+
+# 6. Plotting Expected Values — The Law of Large Numbers
+
+## What is the Law of Large Numbers?
+
+In plain English:
+
+> **The more times you repeat an experiment, the closer the average
+> result gets to the theoretical expected value.**
+
+### Example: Flipping a coin
+
+We know the probability of heads is 0.5, so the expected value of "the
+proportion of heads" is 0.5. The plot below shows that as we increase
+the number of flips, the observed proportion settles down toward 0.5:
 
 ```{r}
 library(ggplot2)
 ```
-
-The below is showing what I said in class, that the expected value will
-converge to the probability when we make the number of trials go towards
-infinity.
-
-This example is for flipping a coin, the larger the number of trials the
-"closer" it is to the probability of 0.5 i.e. the expected value of
-10,000 trials is 5,000
 
 ```{r}
 throw_a_coin <- function(N) {
@@ -332,13 +419,21 @@ ggplot(df, aes(x = trials, y = prob_heads)) +
   )
 ```
 
-Now something for you to do
+> **What to see:** With 10 flips, the proportion might be 0.3 or 0.7 —
+> quite far from 0.5. But with 10,000 flips, it's very close to 0.5.
+> That's the Law of Large Numbers in action!
 
-Show that the expected value for a 6-sided dice is 3.5 by running trials
-and plotting it as above. Use at least 10,000 trials. Plot the running
-average against the number of trials.
+### Your turn: Dice rolls
 
-What about a 12-sided dice?
+The expected value (long-run average) of a fair 6-sided die is:
+
+$$E[X] = \frac{1+2+3+4+5+6}{6} = 3.5$$
+
+For a 12-sided die: $E[X] = \frac{1+2+\ldots+12}{12} = 6.5$
+
+The code below simulates 10,000 rolls of each die and plots the
+**running average** (the average of all rolls so far) against the
+number of rolls. Both should converge to their expected values:
 
 ```{r dice_simulation}
 # Function to roll a 6-sided die N times and return the running average
@@ -374,22 +469,23 @@ ggplot(df_dice, aes(x = trial, y = running_avg, color = die)) +
   theme_minimal()
 ```
 
-**Interpretation:** The expected value (mean face) of a 6-sided die is
-$(1+2+3+4+5+6)/6 = 3.5$ and for a 12-sided die it is
-$(1+2+\ldots+12)/12 = 6.5$. As the number of trials increases, the
-running average converges to these theoretical values, demonstrating the
-Law of Large Numbers.
+> **What to see:** After just a few hundred rolls, the running average
+> is already very close to the expected value. The 6-sided die
+> converges to 3.5 and the 12-sided die converges to 6.5.
 
-# Normal Distribution Probabilities in R
+---
 
-When working with normally distributed random variables, we often need
-to calculate probabilities. In R, we use the `pnorm()` function to
-compute these probabilities.
+# 7. Normal Distribution Probabilities in R
 
-## The `pnorm()` Function
+## The key idea
 
-The `pnorm()` function calculates the cumulative probability P(X ≤ x)
-for a normal distribution.
+For any Normal distribution, we can compute probabilities — i.e., "what
+fraction of the bell curve falls to the left of a given value?"
+
+## The `pnorm()` function — your best friend
+
+`pnorm()` computes the **cumulative probability** $P(X \leq x)$ — the
+area under the bell curve to the **left** of a value $x$.
 
 **Syntax:**
 
@@ -397,25 +493,31 @@ for a normal distribution.
 pnorm(q, mean = 0, sd = 1, lower.tail = TRUE)
 ```
 
--   `q`: the value(s) at which to evaluate the CDF
--   `mean`: the mean of the distribution (default is 0)
--   `sd`: the standard deviation (default is 1)
--   `lower.tail`: if TRUE (default), returns P(X ≤ q); if FALSE, returns
-    P(X \> q)
+| Argument | What it means |
+|---|---|
+| `q` | The value (cutoff point) you're interested in |
+| `mean` | The centre of the bell curve (default: 0) |
+| `sd` | The standard deviation — how wide the bell is (default: 1) |
+| `lower.tail` | If `TRUE` (default): returns P(X ≤ q). If `FALSE`: returns P(X > q) |
+
+### Cheat sheet for computing probabilities
+
+| Probability you want | How to compute it in R |
+|---|---|
+| P(X < b) | `pnorm(b, mean, sd)` |
+| P(X > b) | `pnorm(b, mean, sd, lower.tail = FALSE)` or `1 - pnorm(b, mean, sd)` |
+| P(a < X < b) | `pnorm(b, mean, sd) - pnorm(a, mean, sd)` |
 
 ------------------------------------------------------------------------
 
 ## Example: Heights of Adult Women
 
-Suppose the heights of adult women are normally distributed with: - Mean
-(μ) = 65 inches - Standard deviation (σ) = 3 inches
+Suppose women's heights follow a Normal distribution with:
 
-Let X represent the height of a randomly selected woman.
+- Mean (μ) = **65 inches**
+- Standard deviation (σ) = **3 inches**
 
-### Example 1: P(X \< 68)
-
-**Question:** What is the probability that a randomly selected woman is
-shorter than 68 inches?
+### Example 1: P(X < 68) — "What fraction of women are shorter than 68 inches?"
 
 ```{r}
 # P(X < 68) when X ~ N(65, 3)
@@ -423,21 +525,25 @@ prob1 <- pnorm(68, mean = 65, sd = 3)
 print(paste("P(X < 68) =", round(prob1, 4)))
 ```
 
-Can also use the z-transform
+**Alternative using the Z-transform:** We can convert to a "standard"
+Normal (mean = 0, sd = 1) by computing how many standard deviations
+68 is from the mean:
 
-$P(X < 68) = P(\frac{X-\mu}{\sigma} < \frac{68-\mu}{\sigma}) = P(Z < \frac{68-65}{3}) = P(Z < 1)$
+$$z = \frac{x - \mu}{\sigma} = \frac{68 - 65}{3} = 1$$
+
+So $P(X < 68) = P(Z < 1)$:
 
 ```{r}
 pnorm(1)
 ```
 
-**Interpretation:** There is approximately an 84.13% chance that a
-randomly selected woman is shorter than 68 inches.
+> **Interpretation:** About **84.13%** of women are shorter than 68
+> inches. (Equivalently: 68 inches is 1 standard deviation above the
+> mean.)
 
-### Example 2: P(X \> 68)
+### Example 2: P(X > 68) — "What fraction of women are TALLER than 68 inches?"
 
-**Question:** What is the probability that a randomly selected woman is
-taller than 68 inches?
+This is just 1 minus the previous answer (the "complement"):
 
 ```{r example2}
 # Method 1: Use lower.tail = FALSE
@@ -450,13 +556,12 @@ print(paste("P(X > 68) =", round(prob2a, 4)))
 print(paste("Verification:", round(prob2b, 4)))
 ```
 
-**Interpretation:** There is approximately a 15.87% chance that a
-randomly selected woman is taller than 68 inches.
+> **Interpretation:** About **15.87%** of women are taller than 68
+> inches.
 
-### Example 3: P(62 \< X \< 68)
+### Example 3: P(62 < X < 68) — "What fraction of women are between 62 and 68 inches?"
 
-**Question:** What is the probability that a randomly selected woman has
-a height between 62 and 68 inches?
+We compute: P(X < 68) − P(X < 62) = the area *between* 62 and 68.
 
 ```{r example3}
 # P(62 < X < 68) = P(X < 68) - P(X < 62)
@@ -469,18 +574,17 @@ print(paste("P(X < 62) =", round(prob_less_62, 4)))
 print(paste("P(62 < X < 68) =", round(prob3, 4)))
 ```
 
-**Interpretation:** There is approximately a 68.27% chance that a
-randomly selected woman has a height between 62 and 68 inches.
-
-**Note:** This makes sense! For a normal distribution, about 68% of
-values fall within one standard deviation of the mean (65 ± 3 = [62,
-68]).
+> **Interpretation:** About **68.27%** of women have heights between
+> 62 and 68 inches. This makes sense! The **68-95-99.7 rule** says
+> that about 68% of values fall within 1 standard deviation of the
+> mean, and 62 to 68 is exactly μ ± σ = 65 ± 3.
 
 ------------------------------------------------------------------------
 
-## Visualizing the Probabilities
+## Visualising the Probabilities
 
-Let's visualize these probabilities on the normal curve:
+The shaded areas on these plots represent the probabilities we just
+computed. The area under the curve equals the probability:
 
 ```{r visualization, fig.width=10, fig.height=8}
 # Set up the plotting area for 3 plots
@@ -536,17 +640,14 @@ par(mfrow = c(1, 1))
 
 ------------------------------------------------------------------------
 
-## YOUR TURN: Test Scores
+## Your Turn: Test Scores
 
-**Context:** The scores on a standardized mathematics test are normally
-distributed with: - Mean (μ) = 500 - Standard deviation (σ) = 100
+**Context:** Test scores follow a Normal distribution with:
 
-Let X represent the score of a randomly selected student.
+- Mean (μ) = **500**
+- Standard deviation (σ) = **100**
 
-### Question 1: P(X \< 650)
-
-Calculate the probability that a randomly selected student scores less
-than 650.
+### Question 1: P(X < 650) — "What fraction of students score below 650?"
 
 ```{r question1}
 # Calculate P(X < 650) when X ~ N(500, 100)
@@ -554,13 +655,10 @@ prob_q1 <- pnorm(650, mean = 500, sd = 100)
 print(paste("P(X < 650) =", round(prob_q1, 4)))
 ```
 
-**Your interpretation:** There is approximately a **93.32%** chance that
-a randomly selected student scores **less than** 650 on the test.
+> **Interpretation:** About **93.32%** of students score below 650.
+> That means scoring 650 puts you in the top 7% — quite impressive!
 
-### Question 2: P(X \> 650)
-
-Calculate the probability that a randomly selected student scores more
-than 650.
+### Question 2: P(X > 650) — "What fraction score ABOVE 650?"
 
 ```{r question2}
 # Calculate P(X > 650) when X ~ N(500, 100)
@@ -573,14 +671,10 @@ print(paste("P(X > 650) =", round(prob_q2a, 4)))
 print(paste("Verification:", round(prob_q2b, 4)))
 ```
 
-**Your interpretation:** There is approximately a **6.68%** chance that
-a randomly selected student scores **more than** 650. Only a small
-fraction of students achieve this high score.
+> **Interpretation:** Only about **6.68%** of students score above
+> 650.
 
-### Question 3: P(450 \< X \< 650)
-
-Calculate the probability that a randomly selected student scores
-between 450 and 650.
+### Question 3: P(450 < X < 650) — "What fraction score between 450 and 650?"
 
 ```{r question3}
 # Calculate P(450 < X < 650) when X ~ N(500, 100)
@@ -588,15 +682,11 @@ prob_q3 <- pnorm(650, mean = 500, sd = 100) - pnorm(450, mean = 500, sd = 100)
 print(paste("P(450 < X < 650) =", round(prob_q3, 4)))
 ```
 
-**Your interpretation:** There is approximately a **62.47%** chance that
-a randomly selected student scores between 450 and 650. This range spans
-from half a standard deviation below the mean to 1.5 standard deviations
-above it.
+> **Interpretation:** About **62.47%** of students score between 450
+> and 650. This range spans from 0.5 standard deviations below the
+> mean to 1.5 above it.
 
-### Question 4: Visualization
-
-Create a visualization showing the three probabilities you calculated
-above (similar to the example plots).
+### Question 4: Visualise these three probabilities
 
 ```{r question4_visualization, fig.width=10, fig.height=8}
 # Set up plotting area for 3 plots
@@ -648,11 +738,16 @@ par(mfrow = c(1, 1))
 
 ## Bonus Challenge
 
-Using the same test score distribution (μ = 500, σ = 100):
+### 1. What score is the 90th percentile?
 
-1.  What score represents the 90th percentile? (Hint: use `qnorm()`)
-2.  What percentage of students score within 2 standard deviations of
-    the mean?
+"90th percentile" means the score below which 90% of students fall.
+`qnorm()` is the **inverse** of `pnorm()` — you give it a probability
+and it returns the corresponding value.
+
+### 2. What percentage of students score within 2 standard deviations of the mean?
+
+"Within 2 SDs" means between $\mu - 2\sigma = 300$ and
+$\mu + 2\sigma = 700$.
 
 ```{r bonus}
 # 1. 90th percentile score
@@ -664,44 +759,59 @@ p_within_2sd <- pnorm(700, mean = 500, sd = 100) - pnorm(300, mean = 500, sd = 1
 cat("Percentage within 2 SDs (300 to 700):", round(p_within_2sd * 100, 2), "%\n")
 ```
 
-**Answers:**
+### Answers
 
 1. A student needs to score approximately **628.16** to be in the 90th
-percentile — meaning they scored higher than 90% of test-takers.
+   percentile — meaning they scored higher than 90% of test-takers.
 
 2. Approximately **95.45%** of students score within 2 standard
-deviations of the mean (between 300 and 700). This is the well-known
-**95% rule** for the normal distribution.
+   deviations of the mean. This is the well-known **68-95-99.7 rule**
+   (also called the "empirical rule"): ~68% within 1 SD, ~95% within
+   2 SDs, ~99.7% within 3 SDs.
 
 ------------------------------------------------------------------------
 
-## Summary of R Functions for Normal Distribution
+## Quick Reference: R Functions for the Normal Distribution
 
-| Function             | Purpose                         | Example               |
-|--------------------------|-----------------------|-----------------------|
-| `dnorm(x, mean, sd)` | Probability density at x        | `dnorm(65, 65, 3)`    |
-| `pnorm(q, mean, sd)` | Cumulative probability P(X ≤ q) | `pnorm(68, 65, 3)`    |
-| `qnorm(p, mean, sd)` | Quantile (inverse CDF)          | `qnorm(0.975, 65, 3)` |
-| `rnorm(n, mean, sd)` | Generate random samples         | `rnorm(100, 65, 3)`   |
+| Function | What it does | Example |
+|---|---|---|
+| `dnorm(x, mean, sd)` | Height of the bell curve at point x (the **density**) | `dnorm(65, 65, 3)` |
+| `pnorm(q, mean, sd)` | Area to the **left** of q: P(X ≤ q) | `pnorm(68, 65, 3)` |
+| `qnorm(p, mean, sd)` | The value where the left area = p (**inverse** of pnorm) | `qnorm(0.975, 65, 3)` |
+| `rnorm(n, mean, sd)` | Generate `n` random numbers from this Normal | `rnorm(100, 65, 3)` |
 
-**Remember:** - For P(X \< b): use `pnorm(b, mean, sd)` - For P(X \> b):
-use `pnorm(b, mean, sd, lower.tail = FALSE)` or
-`1 - pnorm(b, mean, sd)` - For P(a \< X \< b): use
-`pnorm(b, mean, sd) - pnorm(a, mean, sd)`
+> **Memory aid:** **d**ensity, **p**robability (cumulative),
+> **q**uantile (inverse), **r**andom. This d/p/q/r pattern works for
+> ALL distributions in R (e.g., `dpois`, `ppois`, `qpois`, `rpois`).
 
-# Poisson Variables
+---
 
-Suppose that the number of goals in a random Galway United football game
-has a Poisson distribution with, on average, 2 goals per game. Find the
-probability of
+# 8. Poisson Distribution Problems
 
-1.  one goal in the next game,
-2.  at least one goal in the next game,
-3.  one goal in the next two games.
-4.  Now, calculate the probability that two goals will be scored in the
-    next game given that at least one goal will be scored.
+## The scenario
 
-These can be got on paper, or using R if you wish
+Galway United football team scores an average of **2 goals per game**.
+The number of goals follows a **Poisson distribution** with $\lambda =
+2$.
+
+We want to compute four probabilities:
+
+1. **Exactly 1 goal** in the next game
+2. **At least 1 goal** in the next game
+3. **Exactly 1 goal** across the next **two** games
+4. **Exactly 2 goals given at least 1 goal** (conditional probability)
+
+### Key idea for question 3
+
+A neat property of the Poisson: if goals in one game follow
+$\text{Pois}(\lambda)$, then goals in TWO games follow
+$\text{Pois}(2\lambda)$. So for two games, $\lambda = 2 \times 2 = 4$.
+
+### Key idea for question 4
+
+This is a **conditional probability**: $P(X = 2 \mid X \geq 1) =
+\frac{P(X = 2)}{P(X \geq 1)}$. We already know how to compute both
+the numerator and denominator.
 
 ```{r poisson_goals}
 lambda_per_game <- 2
@@ -726,60 +836,76 @@ p_cond <- p_two_goals / p_at_least_one
 cat("4. P(X = 2 | X >= 1) =", p_cond, "\n")
 ```
 
-**Solutions:**
+### Answers explained
 
-1. $P(X = 1) = e^{-2}\frac{2^1}{1!} \approx$ `r round(dpois(1,2), 4)` — about **27.07%** chance of exactly 1 goal.
+1. $P(X = 1) = e^{-2}\frac{2^1}{1!} \approx$ `r round(dpois(1,2), 4)`
+   — about **27%** chance of exactly 1 goal. (The most common
+   single outcome, though "0 goals" and "2 goals" are also quite
+   likely.)
 
-2. $P(X \ge 1) = 1 - P(X=0) = 1 - e^{-2} \approx$ `r round(1-dpois(0,2), 4)` — about **86.47%** chance of at least 1 goal.
+2. $P(X \ge 1) = 1 - e^{-2} \approx$ `r round(1-dpois(0,2), 4)` —
+   about **86%** chance of at least 1 goal. (Only ~14% chance of a
+   goalless game.)
 
-3. Over two games, goals follow $\text{Pois}(\lambda=4)$. $P(X=1) = e^{-4}\frac{4^1}{1!} \approx$ `r round(dpois(1,4), 4)` — about **7.33%** chance.
+3. Over two games, $\lambda = 4$. $P(X=1) = e^{-4}\frac{4^1}{1!}
+   \approx$ `r round(dpois(1,4), 4)` — only about **7%** chance of
+   exactly 1 goal across two entire games (quite unlikely since the
+   expected total is 4).
 
-4. $P(X=2 \mid X \ge 1) = \frac{P(X=2)}{P(X \ge 1)} \approx$ `r round(dpois(2,2)/(1-dpois(0,2)), 4)` — about **31.30%**.
+4. $P(X=2 \mid X \ge 1) \approx$ `r round(dpois(2,2)/(1-dpois(0,2)),
+   4)` — about **31%**. Given that at least one goal is scored, the
+   chance of exactly 2 is about 31%.
 
-# Bayes' Theorem - Challenging
+---
 
-Consider the following scenario. You have a disease that is present in
-1% of the human population. You have a test for the disease that is 95%
-accurate, meaning that 95% of the time a person with the disease will
-receive a positive test result, and 5% of the time they will receive a
-negative test result. Conversely, a person without the disease will
-receive a positive test result 5% of the time, and a negative test
-result 95% of the time. Translate the above problem formulation into
-probability statements (i.e. use $D$ for the event that the individual
-has the disease and $D^C$ for the event that they do not, $T$ for a
-positive test, $T^C$ for a negative test). Use Bayes rule to calculate
-the probability that a person with a positive test result has the
-disease (hint: you will need to apply the law of total probability to
-obtain $P(T)$). Does the result surprise you? Use `R` to plot the
-accuracy of the test against the probability that a person with a
-positive test result has the disease for accuracies of between 0% and
-100%.
+# 9. Bayes' Theorem — The Most Surprising Result in Probability
 
-$P(D | T) = \frac{P(T|D)P(D)}{P(T)}$
+## The scenario
 
-By law of total probability $P(T) = P(T \cap D) + P(T\cap D^c)$
+Imagine:
 
-$P(T \cap D) = P(T|D)P(D)$
+- A rare disease affects **1% of the population** ($P(D) = 0.01$).
+- A diagnostic test is **95% accurate**:
+  - If you HAVE the disease, the test correctly says "positive" 95% of
+    the time ($P(T \mid D) = 0.95$).
+  - If you DON'T have the disease, the test correctly says "negative"
+    95% of the time ($P(T^C \mid D^C) = 0.95$).
+  - But this also means 5% of healthy people get a **false positive**
+    ($P(T \mid D^C) = 0.05$).
 
-They're all the hints I'm giving for now
+**The question:** If your test comes back **positive**, what's the
+probability you actually have the disease?
 
-**Setting up the probability statements:**
+Most people guess around 95%. The real answer is shockingly low.
 
-- $P(D) = 0.01$ (prevalence: 1% have the disease)
-- $P(D^C) = 0.99$
-- $P(T \mid D) = 0.95$ (sensitivity: true positive rate)
-- $P(T^C \mid D) = 0.05$ (false negative rate)
-- $P(T \mid D^C) = 0.05$ (false positive rate)
-- $P(T^C \mid D^C) = 0.95$ (specificity: true negative rate)
+## Setting up the probability statements
 
-**Applying the Law of Total Probability:**
+| Symbol | Meaning | Value |
+|---|---|---|
+| $P(D)$ | Prevalence (chance of having the disease) | 0.01 |
+| $P(D^C)$ | Chance of NOT having the disease | 0.99 |
+| $P(T \mid D)$ | Sensitivity (true positive rate) | 0.95 |
+| $P(T^C \mid D)$ | False negative rate | 0.05 |
+| $P(T \mid D^C)$ | False positive rate | 0.05 |
+| $P(T^C \mid D^C)$ | Specificity (true negative rate) | 0.95 |
 
-$$P(T) = P(T \mid D)P(D) + P(T \mid D^C)P(D^C)$$
-$$P(T) = (0.95)(0.01) + (0.05)(0.99) = 0.0095 + 0.0495 = 0.059$$
+## Applying Bayes' Theorem
 
-**Bayes' Rule:**
+We want $P(D \mid T)$ — the probability of disease GIVEN a positive
+test. Bayes' Theorem says:
 
-$$P(D \mid T) = \frac{P(T \mid D) \cdot P(D)}{P(T)} = \frac{0.95 \times 0.01}{0.059} \approx 0.161$$
+$$P(D \mid T) = \frac{P(T \mid D) \cdot P(D)}{P(T)}$$
+
+But we need $P(T)$ — the overall probability of testing positive. We
+get this using the **Law of Total Probability** (every positive test
+comes from either a sick person or a healthy person):
+
+$$P(T) = P(T \mid D) \cdot P(D) + P(T \mid D^C) \cdot P(D^C)$$
+$$= 0.95 \times 0.01 + 0.05 \times 0.99 = 0.0095 + 0.0495 = 0.059$$
+
+Now plug into Bayes:
+
+$$P(D \mid T) = \frac{0.95 \times 0.01}{0.059} \approx 0.161$$
 
 ```{r bayes_theorem}
 # Given values
@@ -799,6 +925,25 @@ cat("\nSurprising? Even with a 95% accurate test, only about",
     round(P_D_given_T * 100, 1), "% of people who test positive actually have the disease!\n")
 cat("This is because the disease is rare (1%), so false positives dominate.\n")
 ```
+
+### Why is the answer so low?
+
+Think about it with concrete numbers. In a population of **10,000
+people**:
+
+- **100** have the disease → **95** test positive (true positives)
+- **9,900** don't have the disease → **495** test positive (false
+  positives!)
+
+So out of $95 + 495 = 590$ positive tests, only $95$ actually have
+the disease. That's $95/590 \approx 16.1\%$.
+
+> **The lesson:** When a disease is rare, even a highly accurate test
+> produces more false positives than true positives!
+
+### How does accuracy affect the result?
+
+Let's plot $P(D \mid T)$ for different test accuracies:
 
 ```{r bayes_plot}
 # Plot P(D|T) as a function of test accuracy (sensitivity = specificity = accuracy)
@@ -831,24 +976,32 @@ ggplot(df_bayes, aes(x = accuracy, y = prob_disease)) +
   theme_minimal()
 ```
 
-**Does the result surprise you?** Yes — even with a 95% accurate test,
-only about **16.1%** of people who receive a positive result actually
-have the disease! This counterintuitive result is explained by the low
-prevalence (1%): most people in the population don't have the disease,
-so even with a 5% false positive rate, many false positives accumulate,
-swamping the true positives.
+> **What to notice:** The test needs to be **extremely** accurate
+> (>99%) before a positive result becomes convincing. At 95% accuracy,
+> most positive results are false alarms!
 
-# Conditional Probability
+---
 
-1.  Given the events $A$ and $B$ and their probability $P(A) =
-    0.2$, $P(B) = 0.4$ and $P(A \cap B) = 0.1$, for each of the
-    following events, draw the probability diagram and shade the region
-    of interest and compute probability of the events.
+# 10. Conditional Probability Exercises
 
-    -   $P(A\vert B)$
-    -   $P(B\vert A)$
+## Exercise 1: Given probabilities
 
-    Are events $A$ and $B$ independent?
+We're given:
+
+- $P(A) = 0.2$
+- $P(B) = 0.4$
+- $P(A \cap B) = 0.1$
+
+We want to compute $P(A \mid B)$, $P(B \mid A)$, and check whether A
+and B are independent.
+
+Recall the formulas:
+
+- $P(A \mid B) = \frac{P(A \cap B)}{P(B)}$ — "Of the times B happens,
+  how often does A also happen?"
+- $P(B \mid A) = \frac{P(A \cap B)}{P(A)}$ — "Of the times A happens,
+  how often does B also happen?"
+- A and B are independent if $P(A \cap B) = P(A) \times P(B)$
 
 ```{r conditional_probability}
 P_A       <- 0.2
@@ -870,17 +1023,40 @@ cat("Are A and B independent?", ifelse(P_A * P_B == P_A_and_B, "YES", "NO"), "\n
 cat("Since", P_A * P_B, "≠", P_A_and_B, ", A and B are NOT independent.\n")
 ```
 
-**Answers:**
+### Answers
 
-- $P(A \mid B) = \frac{P(A \cap B)}{P(B)} = \frac{0.1}{0.4} = 0.25$
-- $P(B \mid A) = \frac{P(A \cap B)}{P(A)} = \frac{0.1}{0.2} = 0.5$
-- **Independence:** $A$ and $B$ are **not independent** because $P(A) \times P(B) = 0.08 \ne 0.1 = P(A \cap B)$.
+- $P(A \mid B) = \frac{0.1}{0.4} = 0.25$ — Given B occurred, there's a
+  25% chance A also occurred.
+- $P(B \mid A) = \frac{0.1}{0.2} = 0.5$ — Given A occurred, there's a
+  50% chance B also occurred.
+- **Independence:** $P(A) \times P(B) = 0.08$, but $P(A \cap B) =
+  0.1$. Since $0.08 \neq 0.1$, A and B are **NOT independent** —
+  knowing one event changes the probability of the other.
 
-2.  The probability of living in the outback, given that you have seen a
-    UFO is 0.4. The probability of living in the outback, given that you
-    have not seen a UFO is 0.2. Given that the probability of seeing a
-    UFO is 0.01, what is the probability of seeing a UFO, given that you
-    live in the outback?
+---
+
+## Exercise 2: UFO Sightings in the Outback
+
+### The scenario
+
+- $P(O \mid U) = 0.4$ — If you've seen a UFO, there's a 40% chance you
+  live in the outback.
+- $P(O \mid U^C) = 0.2$ — If you haven't seen a UFO, there's a 20%
+  chance you live in the outback.
+- $P(U) = 0.01$ — The overall probability of seeing a UFO is 1%.
+
+**Question:** What is $P(U \mid O)$ — the probability of seeing a UFO,
+*given* that you live in the outback?
+
+### Applying Bayes' Theorem
+
+First, find $P(O)$ using the Law of Total Probability:
+
+$$P(O) = P(O \mid U) \cdot P(U) + P(O \mid U^C) \cdot P(U^C)$$
+
+Then apply Bayes:
+
+$$P(U \mid O) = \frac{P(O \mid U) \cdot P(U)}{P(O)}$$
 
 ```{r ufo_bayes}
 # Let U = event of seeing a UFO, O = event of living in the outback
@@ -898,12 +1074,11 @@ cat("P(UFO | Outback) =", round(P_U_given_O, 6), "\n")
 cat("Approximately", round(P_U_given_O * 100, 4), "%\n")
 ```
 
-**Solution using Bayes' Theorem:**
+### Answer
 
-$$P(U \mid O) = \frac{P(O \mid U) \cdot P(U)}{P(O \mid U) \cdot P(U) + P(O \mid U^C) \cdot P(U^C)}$$
+$$P(U \mid O) = \frac{0.4 \times 0.01}{0.4 \times 0.01 + 0.2 \times 0.99} = \frac{0.004}{0.202} \approx 0.0198$$
 
-$$= \frac{0.4 \times 0.01}{0.4 \times 0.01 + 0.2 \times 0.99} = \frac{0.004}{0.004 + 0.198} = \frac{0.004}{0.202} \approx 0.0198$$
-
-So if you live in the outback, there is approximately a **1.98%**
-chance you have seen a UFO — slightly higher than the base rate of 1%,
-since outback dwellers are more likely to report UFO sightings.
+If you live in the outback, there's approximately a **1.98%** chance
+you've seen a UFO — slightly higher than the base rate of 1%, because
+outback dwellers are more likely to report UFO sightings (perhaps
+because of darker skies and less light pollution! 🛸).
