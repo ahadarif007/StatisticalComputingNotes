@@ -35,7 +35,7 @@ A **sample** is a smaller, manageable subset drawn from that population for anal
 ## Parameters vs Statistics
 
 | Term | Definition | Example |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | **Parameter** | A numerical value that describes the *population* | Population mean μ |
 | **Statistic** | A numerical value calculated from a *sample* | Sample mean x̄ |
 
@@ -59,7 +59,7 @@ Parameters are typically unknown; statistics are what we compute and use to *est
 ## Discrete vs Continuous Variables
 
 | Variable Type | Description | Examples |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | **Discrete** | Countable whole numbers; gaps exist between values | Number of students, coin flips |
 | **Continuous** | Any value within a range; decimals allowed | Height, temperature, reaction time |
 
@@ -68,7 +68,7 @@ Parameters are typically unknown; statistics are what we compute and use to *est
 The scale of measurement determines what statistical operations are meaningful.
 
 | Scale | Properties | Examples |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | **Nominal** | Categories only; no order | Eye colour, gender |
 | **Ordinal** | Ordered categories; differences not meaningful | Satisfaction level, class rank |
 | **Interval** | Equal gaps; no true zero | Temperature in °C, calendar year |
@@ -155,7 +155,7 @@ par(mfrow = c(1, 1))   # reset layout
 # Chapter Summary
 
 | Topic | Key Takeaway |
-|------------------------------------|------------------------------------|
+|----|----|
 | Population vs Sample | Samples are used to make inferences about populations |
 | Parameters vs Statistics | Parameters describe populations; statistics describe samples |
 | Sampling Variability | Different samples from the same population yield different statistics |

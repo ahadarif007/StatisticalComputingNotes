@@ -299,7 +299,7 @@ NOT a bell curve — it's flat!
 
 ```{r}
 a <- runif(10^6)
-a
+# a [ too much big data to print ]
 ```
 
 ```{r}

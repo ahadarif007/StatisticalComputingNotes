@@ -44,8 +44,8 @@ $$
 \ell(\theta) = \sum_{i=1}^n \log f(x_i \mid \theta)
 $$
 
-- The **log-likelihood** ($\ell$) and the likelihood ($L$) reach their peak at exactly the same value of $\theta$, so maximising either one gives the same answer.
-- From now on, we'll almost always work with the **log-likelihood**.
+-   The **log-likelihood** ($\ell$) and the likelihood ($L$) reach their peak at exactly the same value of $\theta$, so maximising either one gives the same answer.
+-   From now on, we'll almost always work with the **log-likelihood**.
 
 ### The Maximum Likelihood Estimate (MLE)
 
@@ -57,12 +57,12 @@ The **MLE** $\hat{\theta}$ is simply the value of $\theta$ that makes $\ell(\the
 
 In R, probability distribution functions start with the letter `d` (for "density"):
 
-| Distribution | R function | Example |
-|---|---|---|
-| Poisson | `dpois()` | Counting rare events |
-| Normal | `dnorm()` | Bell-curve data |
-| Binomial | `dbinom()` | Success/failure trials |
-| Exponential | `dexp()` | Waiting times |
+| Distribution | R function | Example                |
+|--------------|------------|------------------------|
+| Poisson      | `dpois()`  | Counting rare events   |
+| Normal       | `dnorm()`  | Bell-curve data        |
+| Binomial     | `dbinom()` | Success/failure trials |
+| Exponential  | `dexp()`   | Waiting times          |
 
 All of these accept a `log = TRUE` argument, which returns $\log f(x \mid \theta)$ directly. This makes computing log-likelihoods easy — just `sum()` up the log-densities!
 
@@ -273,8 +273,8 @@ filled.contour(mu_vals, sigma_vals, ll_surface,
 
 > **What to notice:**
 >
-> - The **darkest region** is where the log-likelihood is highest — that's where the MLE lives.
-> - The **shape of the contours** (elongated? circular?) tells us about the **relationship** between uncertainty in $\mu$ and uncertainty in $\sigma$. This is a preview of the idea of **confidence regions** — zones where the true parameter is likely to be.
+> -   The **darkest region** is where the log-likelihood is highest — that's where the MLE lives.
+> -   The **shape of the contours** (elongated? circular?) tells us about the **relationship** between uncertainty in $\mu$ and uncertainty in $\sigma$. This is a preview of the idea of **confidence regions** — zones where the true parameter is likely to be.
 
 ------------------------------------------------------------------------
 
@@ -296,9 +296,7 @@ D(expression(log(t)), "t")
 D(expression(t^3 - 2*t), "t")
 ```
 
-**How to read the output:** R returns the derivative as an R expression. For example:
-- `D(expression(log(t)), "t")` returns `1/t` (because the derivative of $\log(t)$ is $\frac{1}{t}$).
-- `D(expression(t^3 - 2*t), "t")` returns `3 * t^2 - 2` (the power rule!).
+**How to read the output:** R returns the derivative as an R expression. For example: - `D(expression(log(t)), "t")` returns `1/t` (because the derivative of $\log(t)$ is $\frac{1}{t}$). - `D(expression(t^3 - 2*t), "t")` returns `3 * t^2 - 2` (the power rule!).
 
 **Your turn:** Use `D()` to find the derivative of each of the following with respect to $t$.
 
@@ -382,7 +380,7 @@ So far, we've been lucky — the Poisson, Normal, and Binomial all have **closed
 R's `mle()` function (from the `stats4` package) does this for us. Here's what it needs:
 
 | Argument | What it is | Why |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | **A function** | The **negative** log-likelihood | `mle()` uses a minimiser internally, so we flip the sign: minimising $-\ell$ is the same as maximising $\ell$ |
 | `start` | A list of **initial guesses** for the parameters | The algorithm needs a starting point to begin its search |
 | `nobs` | The number of observations | Used for calculating information criteria like AIC |
@@ -408,18 +406,18 @@ summary(fit_pois)
 
 ### How to read the output
 
-- **Estimate:** This is the MLE $\hat{\lambda}$ — the value of lambda that maximises the log-likelihood. It should match the sample mean $\bar{x}$ = `r round(mean(x), 4)`.
-- **Std. Error:** This tells you how "certain" we are about the estimate. A smaller standard error means more certainty. It's derived from the **curvature** of the log-likelihood at its peak — a sharply peaked curve means more precision.
+-   **Estimate:** This is the MLE $\hat{\lambda}$ — the value of lambda that maximises the log-likelihood. It should match the sample mean $\bar{x}$ = `r round(mean(x), 4)`.
+-   **Std. Error:** This tells you how "certain" we are about the estimate. A smaller standard error means more certainty. It's derived from the **curvature** of the log-likelihood at its peak — a sharply peaked curve means more precision.
 
 ## Always check convergence!
 
 When you call `mle()`, the fitted object stores detailed information about the optimisation process. You can access this with `fit@details`. **The most important thing to check** is the convergence code:
 
-| Code | Meaning |
-|---|---|
-| **0** | ✅ Success! The algorithm converged. |
-| **1** | ⚠️ Hit the iteration limit before converging. |
-| **52 or 54** | ❌ Numerical problems with the likelihood. |
+| Code         | Meaning                                       |
+|--------------|-----------------------------------------------|
+| **0**        | ✅ Success! The algorithm converged.          |
+| **1**        | ⚠️ Hit the iteration limit before converging. |
+| **52 or 54** | ❌ Numerical problems with the likelihood.    |
 
 > **Warning:** `mle()` will **not** throw an error or warning if it fails to converge — it will just return whatever parameter value it ended up at, which could be completely wrong. **Always** check `fit@details$convergence == 0` before trusting your results!
 
@@ -497,8 +495,8 @@ cat("Sample sd:  ", round(sd(bwt_smokers), 4), "\n")
 
 You'll notice a small difference between the MLE for $\sigma$ and R's `sd()` function. This is because:
 
-- **MLE** divides by $n$ (the sample size).
-- **`sd()` in R** divides by $n - 1$ (this is called **Bessel's correction**, which gives a less biased estimate for small samples).
+-   **MLE** divides by $n$ (the sample size).
+-   **`sd()` in R** divides by $n - 1$ (this is called **Bessel's correction**, which gives a less biased estimate for small samples).
 
 The difference shrinks as the sample gets larger, and for practical purposes they're very close.
 
@@ -513,7 +511,7 @@ When you call `mle()`, it uses R's general-purpose optimisation function `optim(
 Think of it like searching for the highest point on a mountain in dense fog:
 
 | Method | Analogy | How it works |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | **Nelder-Mead** | Wander around and keep track of which directions went uphill | Doesn't need to know the slope (derivative-free). Robust but slow. |
 | **BFGS** | Use a compass *and* read the slope of the ground under your feet | Uses gradient (slope) information to take smart steps. Fast and efficient. |
 | **Gradient Ascent** | Always walk in the steepest uphill direction, one small step at a time | The simplest method. Easy to understand but can be slow. |
@@ -522,26 +520,26 @@ Think of it like searching for the highest point on a mountain in dense fog:
 
 **Nelder-Mead** (the default in `optim()`):
 
-- Creates a geometric shape (called a "simplex") in parameter space and moves it around — reflecting, expanding, or shrinking it — to home in on the peak.
-- **Pros:** No derivatives needed. Very robust (hard to break).
-- **Cons:** Can be slow, especially with many parameters.
+-   Creates a geometric shape (called a "simplex") in parameter space and moves it around — reflecting, expanding, or shrinking it — to home in on the peak.
+-   **Pros:** No derivatives needed. Very robust (hard to break).
+-   **Cons:** Can be slow, especially with many parameters.
 
 **BFGS** (Broyden–Fletcher–Goldfarb–Shanno):
 
-- A "quasi-Newton" method. Newton's method uses the gradient (first derivative) AND the Hessian (second derivative) to make very smart decisions about where to step next. BFGS *approximates* the Hessian from past gradient calculations, saving computation.
-- **Pros:** Much faster than Nelder-Mead on smooth problems.
-- **Cons:** Needs the log-likelihood to be smooth (no sudden jumps or flat spots).
+-   A "quasi-Newton" method. Newton's method uses the gradient (first derivative) AND the Hessian (second derivative) to make very smart decisions about where to step next. BFGS *approximates* the Hessian from past gradient calculations, saving computation.
+-   **Pros:** Much faster than Nelder-Mead on smooth problems.
+-   **Cons:** Needs the log-likelihood to be smooth (no sudden jumps or flat spots).
 
 **Gradient Ascent** (the DIY method):
 
-- At each step, compute the slope (gradient) and take a small step uphill. The step size $\gamma$ is called the **learning rate**:
+-   At each step, compute the slope (gradient) and take a small step uphill. The step size $\gamma$ is called the **learning rate**:
 
 $$
 \theta^{(t+1)} = \theta^{(t)} + \gamma \cdot \frac{\partial \ell}{\partial \theta}\bigg|_{\theta^{(t)}}
 $$
 
-- **Pros:** Very simple and easy to implement by hand.
-- **Cons:** Sensitive to the learning rate $\gamma$. Too big → overshoot and oscillate. Too small → painfully slow.
+-   **Pros:** Very simple and easy to implement by hand.
+-   **Cons:** Sensitive to the learning rate $\gamma$. Too big → overshoot and oscillate. Too small → painfully slow.
 
 ### What does `mle()` use?
 
@@ -570,8 +568,8 @@ cat("True MLE (mean x):   ", round(mean(x), 6), "\n")
 
 Now let's implement gradient ascent ourselves. For the Poisson log-likelihood:
 
-- The derivative (gradient) is: $\frac{\partial \ell}{\partial \lambda} = \frac{\sum x_i}{\lambda} - n$
-- At each iteration, we update: $\lambda_{\text{new}} = \lambda_{\text{old}} + \gamma \times \text{gradient}$
+-   The derivative (gradient) is: $\frac{\partial \ell}{\partial \lambda} = \frac{\sum x_i}{\lambda} - n$
+-   At each iteration, we update: $\lambda_{\text{new}} = \lambda_{\text{old}} + \gamma \times \text{gradient}$
 
 ```{r gradient-ascent-poisson}
 # Gradient ascent by hand for the Poisson log-likelihood.
@@ -600,9 +598,9 @@ cat("Gradient ascent estimate after", n_iter, "iterations:", round(lambda, 6), "
 
 > **What to notice:** Gradient ascent eventually reaches the correct answer, but it takes **many more iterations** than BFGS. Try changing the learning rate:
 >
-> - `gamma = 0.01` → Faster convergence (bigger steps)
-> - `gamma = 0.0001` → Slower convergence (tinier steps)
-> - `gamma = 0.1` → Might overshoot and oscillate!
+> -   `gamma = 0.01` → Faster convergence (bigger steps)
+> -   `gamma = 0.0001` → Slower convergence (tinier steps)
+> -   `gamma = 0.1` → Might overshoot and oscillate!
 
 ## Your turn: Comparing Methods on Birth Weight Data
 
@@ -650,8 +648,8 @@ $$
 
 where:
 
-- $\alpha > 0$ is the **shape** parameter (controls the curve's shape — small $\alpha$ = very skewed, large $\alpha$ = more symmetric)
-- $\beta > 0$ is the **rate** parameter (controls how stretched out the distribution is)
+-   $\alpha > 0$ is the **shape** parameter (controls the curve's shape — small $\alpha$ = very skewed, large $\alpha$ = more symmetric)
+-   $\beta > 0$ is the **rate** parameter (controls how stretched out the distribution is)
 
 ### The tricky part
 
@@ -680,9 +678,9 @@ cat("Sum of log(x):", round(sum(log(x_gamma)), 4), "\n")
 
 **Your turn:** The code below implements gradient ascent. It:
 
-1. Computes the gradient (slope) of the log-likelihood at the current $\alpha$.
-2. Takes a small step in the uphill direction: $\alpha_{\text{new}} = \alpha_{\text{old}} + \gamma \times \text{gradient}$.
-3. Repeats until the changes become negligibly small.
+1.  Computes the gradient (slope) of the log-likelihood at the current $\alpha$.
+2.  Takes a small step in the uphill direction: $\alpha_{\text{new}} = \alpha_{\text{old}} + \gamma \times \text{gradient}$.
+3.  Repeats until the changes become negligibly small.
 
 ```{r gamma-gradient-ascent}
 gradient <- function(alpha, sample) {
@@ -719,9 +717,9 @@ abline(h = result$alpha, col = "tomato", lty = 2, lwd = 2)
 
 > **Tips:**
 >
-> - A reasonable starting value might be $\alpha = 1$ or $\alpha = 5$.
-> - If your trace plot looks unstable (oscillating wildly), **reduce the learning rate** (e.g., try `step = 0.01` instead of `0.1`).
-> - If it's converging very slowly, try a **larger learning rate**.
+> -   A reasonable starting value might be $\alpha = 1$ or $\alpha = 5$.
+> -   If your trace plot looks unstable (oscillating wildly), **reduce the learning rate** (e.g., try `step = 0.01` instead of `0.1`).
+> -   If it's converging very slowly, try a **larger learning rate**.
 
 ### Verifying with `mle()`
 
@@ -782,7 +780,7 @@ summary(fit_gamma)
 # Quick Reference: Key Concepts
 
 | Term | Plain English |
-|---|---|
+|------------------------------------|------------------------------------|
 | **Likelihood** $L(\theta)$ | "How plausible is this parameter value, given my data?" |
 | **Log-likelihood** $\ell(\theta)$ | Same thing, but on a log scale (easier for computers) |
 | **MLE** $\hat{\theta}$ | The parameter value that makes the data most plausible |

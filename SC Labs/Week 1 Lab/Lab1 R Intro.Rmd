@@ -14,23 +14,32 @@ editor_options:
 
 # Getting Started: R Basics for Beginners
 
-If you've used Python before, R will feel partially familiar — but there are some important differences. This section covers the essentials you need to get going. **If you've never programmed before, don't worry** — everything is explained step by step.
+If you've used Python before, R will feel partially familiar — but there
+are some important differences. This section covers the essentials you
+need to get going. **If you've never programmed before, don't worry** —
+everything is explained step by step.
 
 ## Using the R Console (the "REPL")
 
-The **console** is the panel (usually at the bottom of RStudio) where you type commands and R responds with results. Here's what the prompts mean:
+The **console** is the panel (usually at the bottom of RStudio) where
+you type commands and R responds with results. Here's what the prompts
+mean:
 
-- **`>`** — R is ready and waiting for you to type something.
-- **`+`** — R thinks your previous line was incomplete (e.g., you opened a bracket but didn't close it). Either finish the expression or press **Escape** to cancel.
-- **Tab** — Press this key to auto-complete variable names, function names, and file paths. Very handy!
-- **Ctrl+Enter** (or **Cmd+Enter** on Mac) — Runs the current line (or highlighted code) from a script or R Markdown file.
+-   **`>`** — R is ready and waiting for you to type something.
+-   **`+`** — R thinks your previous line was incomplete (e.g., you
+    opened a bracket but didn't close it). Either finish the expression
+    or press **Escape** to cancel.
+-   **Tab** — Press this key to auto-complete variable names, function
+    names, and file paths. Very handy!
+-   **Ctrl+Enter** (or **Cmd+Enter** on Mac) — Runs the current line (or
+    highlighted code) from a script or R Markdown file.
 
 ## Key Differences: R vs Python
 
 If you've used Python, here's a quick comparison:
 
 | Python | R | Example |
-|---|---|---|
+|----|----|----|
 | `obj.method(arg)` | `fun(obj, arg)` | R uses functions, not methods |
 | `:` and indentation for blocks | `{ }` curly braces for blocks | `if (x > 0) { print("yes") }` |
 | Indexing starts at **0** | Indexing starts at **1** | `x[1]` gets the *first* element in R |
@@ -38,39 +47,54 @@ If you've used Python, here's a quick comparison:
 | `x.append("foo")` | `x <- c(x, "foo")` | R doesn't modify in-place |
 | `=` for assignment | `<-` for assignment | `x <- 5` (the arrow "points" to the variable) |
 
-> **Why `<-` instead of `=`?** Both *technically* work in R, but `<-` is the convention and they actually have slightly different behaviour in some situations. Just use `<-` and you'll be safe.
+> **Why `<-` instead of `=`?** Both *technically* work in R, but `<-` is
+> the convention and they actually have slightly different behaviour in
+> some situations. Just use `<-` and you'll be safe.
 
 ## How to Get Help
 
 R has excellent built-in documentation:
 
-- **`?topic`** or **`help("topic")`** — Opens the help page for any function or topic. Example: `?mean`
-- **`example(fun)`** — Shows live examples of how a function is used. Try `example(plot)`!
-- **`help(package = "foo")`** — Shows all the functions in a package.
-- Don't be scared by functions with 20+ arguments — usually only 2 or 3 are required. The rest have sensible defaults.
+-   **`?topic`** or **`help("topic")`** — Opens the help page for any
+    function or topic. Example: `?mean`
+-   **`example(fun)`** — Shows live examples of how a function is used.
+    Try `example(plot)`!
+-   **`help(package = "foo")`** — Shows all the functions in a package.
+-   Don't be scared by functions with 20+ arguments — usually only 2 or
+    3 are required. The rest have sensible defaults.
 
 ## Installing and Loading Packages
 
-Packages are **add-on libraries** that extend R's capabilities (like pip packages in Python):
+Packages are **add-on libraries** that extend R's capabilities (like pip
+packages in Python):
 
-- **Install:** `install.packages("packagename")` — downloads the package (you only need to do this once).
-- **Load:** `library(packagename)` — makes the package available for your current session (you do this every time you restart R).
-- Unlike Python, you don't need to type `package.function()` — just call the function directly after loading the package. If two packages have functions with the same name, use `package::function()` to specify which one.
+-   **Install:** `install.packages("packagename")` — downloads the
+    package (you only need to do this once).
+-   **Load:** `library(packagename)` — makes the package available for
+    your current session (you do this every time you restart R).
+-   Unlike Python, you don't need to type `package.function()` — just
+    call the function directly after loading the package. If two
+    packages have functions with the same name, use
+    `package::function()` to specify which one.
 
----
+------------------------------------------------------------------------
 
 # Statistical Computing – Lab 1: R for Computational Statistics
 
 ## What This Lab Is About
 
-In this module, **R isn't just a calculator** — it's a language for writing **statistical algorithms**. Throughout the course, you'll use R for things like:
+In this module, **R isn't just a calculator** — it's a language for
+writing **statistical algorithms**. Throughout the course, you'll use R
+for things like:
 
-- **Likelihood-based inference** (estimating parameters from data)
-- **Simulation studies** (generating fake data to test methods)
-- **Numerical optimisation** (finding the best-fitting model)
-- **Mixture models and MCMC** (advanced modelling techniques)
+-   **Likelihood-based inference** (estimating parameters from data)
+-   **Simulation studies** (generating fake data to test methods)
+-   **Numerical optimization** (finding the best-fitting model)
+-   **Mixture models and MCMC** (advanced modelling techniques)
 
-This lab teaches you the **core R skills** that everything else builds on. Almost every concept here will come back in later weeks, so it's worth getting comfortable now.
+This lab teaches you the **core R skills** that everything else builds
+on. Almost every concept here will come back in later weeks, so it's
+worth getting comfortable now.
 
 ------------------------------------------------------------------------
 
@@ -78,15 +102,21 @@ This lab teaches you the **core R skills** that everything else builds on. Almos
 
 ### Why `set.seed()`?
 
-Statistical computing uses **random numbers** a lot (for simulations, sampling, etc.). But if your results change every time you run the code, nobody can reproduce your work! `set.seed()` fixes the random number generator to a specific starting point, so you get the **same "random" numbers every time**.
+Statistical computing uses **random numbers** a lot (for simulations,
+sampling, etc.). But if your results change every time you run the code,
+nobody can reproduce your work! `set.seed()` fixes the random number
+generator to a specific starting point, so you get the **same "random"
+numbers every time**.
 
 ```{r}
 set.seed(123)
+
 ```
 
 ### Basic vector operations
 
-A **vector** is just a list of numbers. It's the most fundamental data structure in R. Here we create one and compute some basic statistics:
+A **vector** is just a list of numbers. It's the most fundamental data
+structure in R. Here we create one and compute some basic statistics:
 
 ```{r}
 x <- c(1, 2, 3, 4, 5)
@@ -95,27 +125,37 @@ sum(x)
 sd(x)
 ```
 
-- **`mean(x)`** — the average: add up all the numbers and divide by how many there are.
-- **`sum(x)`** — adds up all the numbers.
-- **`sd(x)`** — the standard deviation: a measure of how spread out the numbers are.
+-   **`mean(x)`** — the average: add up all the numbers and divide by
+    how many there are.
+-   **`sum(x)`** — adds up all the numbers.
+-   **`sd(x)`** — the standard deviation: a measure of how spread out
+    the numbers are.
 
 ### Computing the mean "by hand"
 
-The sample mean is just $\bar{x} = \frac{\text{sum of all values}}{\text{number of values}}$. We can write that directly in R:
+The sample mean is just
+$\bar{x} = \frac{\text{sum of all values}}{\text{number of values}}$. We
+can write that directly in R:
 
 ```{r}
 sum(x) / length(x)
 ```
 
-This gives the same answer as `mean(x)`. Later in the module, we'll see that *how* you compute things can matter when numbers are very large or very small (a topic called **numerical stability**).
+This gives the same answer as `mean(x)`. Later in the module, we'll see
+that *how* you compute things can matter when numbers are very large or
+very small (a topic called **numerical stability**).
 
 ### Your turn: Extreme numbers
 
-What happens when we mix very large and very small numbers? Let's find out. Below we create a vector with one huge number (10,000,000,000,000,000) and three tiny ones (1, 2, 3), then compute the mean three different ways:
+What happens when we mix very large and very small numbers? Let's find
+out. Below we create a vector with one huge number
+(10,000,000,000,000,000) and three tiny ones (1, 2, 3), then compute the
+mean three different ways:
 
-- **Method 1:** R's built-in `mean()`.
-- **Method 2:** Manual `sum(x) / length(x)`.
-- **Method 3:** A "compensated" approach that subtracts a reference value first to reduce rounding errors.
+-   **Method 1:** R's built-in `mean()`.
+-   **Method 2:** Manual `sum(x) / length(x)`.
+-   **Method 3:** A "compensated" approach that subtracts a reference
+    value first to reduce rounding errors.
 
 ```{r}
 x <- c(1e16, 1, 2, 3)
@@ -135,7 +175,8 @@ cat("Compensated mean:   ", mean_compensated, "\n")
 cat("Difference (builtin - manual):", mean_builtin - mean_manual, "\n")
 ```
 
-The difference looks like zero... but is it *really* zero? Let's display all the decimal places to find out:
+The difference looks like zero... but is it *really* zero? Let's display
+all the decimal places to find out:
 
 ```{r}
 options(digits = 22)
@@ -146,7 +187,10 @@ cat("Difference (builtin - manual):", mean_builtin - mean_manual, "\n")
 options(digits = 7)  # reset to default
 ```
 
-> **Takeaway:** Computers store numbers with limited precision (about 15–16 significant digits). When you mix very large and very small numbers, the small ones can get "lost" in the rounding. This is why numerical methods matter!
+> **Takeaway:** Computers store numbers with limited precision (about
+> 15–16 significant digits). When you mix very large and very small
+> numbers, the small ones can get "lost" in the rounding. This is why
+> numerical methods matter!
 
 ------------------------------------------------------------------------
 
@@ -154,14 +198,17 @@ options(digits = 7)  # reset to default
 
 ### What is a vector?
 
-A **vector** is R's most basic data structure — simply an ordered collection of values of the same type (all numbers, or all text, etc.). Almost everything in R operates on vectors.
+A **vector** is R's most basic data structure — simply an ordered
+collection of values of the same type (all numbers, or all text, etc.).
+Almost everything in R operates on vectors.
 
 ```{r}
 x <- c(10, 11, 12)
 names(x) <- c("first", "second", "third")
 ```
 
-Here we created a vector with three numbers and gave each one a **name**. Names are optional but make code more readable.
+Here we created a vector with three numbers and gave each one a
+**name**. Names are optional but make code more readable.
 
 ### Extracting elements (indexing)
 
@@ -173,15 +220,21 @@ x[x > 10]
 x[c("first", "third")]
 ```
 
-- **`x[1:2]`** — Gets elements 1 and 2 (remember: R counts from 1, not 0!).
-- **`x[x > 10]`** — Gets only the elements greater than 10. This is called **logical indexing** — R checks each element, keeps the ones where the condition is `TRUE`, and drops the rest.
-- **`x[c("first", "third")]`** — Gets elements by their names.
+-   **`x[1:2]`** — Gets elements 1 and 2 (remember: R counts from 1, not
+    0!).
+-   **`x[x > 10]`** — Gets only the elements greater than 10. This is
+    called **logical indexing** — R checks each element, keeps the ones
+    where the condition is `TRUE`, and drops the rest.
+-   **`x[c("first", "third")]`** — Gets elements by their names.
 
-> **Logical indexing** is one of the most useful tricks in R. You'll use it constantly for filtering data.
+> **Logical indexing** is one of the most useful tricks in R. You'll use
+> it constantly for filtering data.
 
 ### Your turn: Working with random numbers
 
-The function `rnorm(n)` generates `n` random numbers from a Normal (bell curve) distribution. If you're unsure what a function does, type `?rnorm` in the console to see its help page.
+The function `rnorm(n)` generates `n` random numbers from a Normal (bell
+curve) distribution. If you're unsure what a function does, type
+`?rnorm` in the console to see its help page.
 
 ```{r}
 # Create a numeric vector of length 10 using rnorm()
@@ -209,7 +262,9 @@ v_nonneg
 
 ### What is a data frame?
 
-A **data frame** is R's version of a spreadsheet — it stores data in rows and columns. Each column is a vector, and all columns must have the same number of rows. This is how you'll store most datasets.
+A **data frame** is R's version of a spreadsheet — it stores data in
+rows and columns. Each column is a vector, and all columns must have the
+same number of rows. This is how you'll store most datasets.
 
 ```{r}
 students <- data.frame(
@@ -224,17 +279,23 @@ summary(students)
 
 ### Dealing with missing values (`NA`)
 
-In R, **`NA`** means "Not Available" — i.e., the value is missing. Dana's age is `NA` above. If you try to compute the mean of a column with `NA`s, R will return `NA` (because it doesn't know the missing value). To tell R "just ignore the missing ones", use `na.rm = TRUE`:
+In R, **`NA`** means "Not Available" — i.e., the value is missing.
+Dana's age is `NA` above. If you try to compute the mean of a column
+with `NA`s, R will return `NA` (because it doesn't know the missing
+value). To tell R "just ignore the missing ones", use `na.rm = TRUE`:
 
 ```{r}
 mean(students$age, na.rm = TRUE)
 ```
 
-> **`na.rm`** stands for "NA remove". You'll use this argument all the time.
+> **`na.rm`** stands for "NA remove". You'll use this argument all the
+> time.
 
 ### Adding new columns using a mapping
 
-Sometimes you want to convert categories to numbers (e.g., grades to numeric scores). You can do this by creating a **named vector** that acts like a lookup table:
+Sometimes you want to convert categories to numbers (e.g., grades to
+numeric scores). You can do this by creating a **named vector** that
+acts like a lookup table:
 
 ```{r}
 # Add a new column converting grades to numeric values (A = 70, B = 60)
@@ -243,18 +304,22 @@ students$grade_numeric <- gmap[students$grade]
 students
 ```
 
-**How this works:** `gmap` is a named vector where `A` maps to 70 and `B` maps to 60. When you write `gmap[students$grade]`, R looks up each student's grade in the mapping and returns the corresponding number.
+**How this works:** `gmap` is a named vector where `A` maps to 70 and
+`B` maps to 60. When you write `gmap[students$grade]`, R looks up each
+student's grade in the mapping and returns the corresponding number.
 
-### Summarising by group
+### Summarizing by group
 
-The `aggregate()` function lets you compute a summary (like the mean) **separately for each group**:
+The `aggregate()` function lets you compute a summary (like the mean)
+**separately for each group**:
 
 ```{r}
 # Compute the average age for each grade
 aggregate(age ~ grade, data = students, FUN = mean, na.rm = TRUE)
 ```
 
-> **Reading the formula:** `age ~ grade` means "break `age` into groups defined by `grade`, and apply the function to each group."
+> **Reading the formula:** `age ~ grade` means "break `age` into groups
+> defined by `grade`, and apply the function to each group."
 
 ------------------------------------------------------------------------
 
@@ -262,11 +327,15 @@ aggregate(age ~ grade, data = students, FUN = mean, na.rm = TRUE)
 
 ### Why do we care about probability in R?
 
-Many things we'll do later in this module — likelihood functions, simulations, mixture models, MCMC — are built directly on probability. This section lets you practise probability calculations **using R code** rather than just pen and paper.
+Many things we'll do later in this module — likelihood functions,
+simulations, mixture models, MCMC — are built directly on probability.
+This section lets you practise probability calculations **using R code**
+rather than just pen and paper.
 
 ### Sample Spaces and Events
 
-When we roll a fair die, the **sample space** $\Omega$ is the set of all possible outcomes:
+When we roll a fair die, the **sample space** $\Omega$ is the set of all
+possible outcomes:
 
 ```{r}
 omega <- 1:6
@@ -275,8 +344,8 @@ omega
 
 Now let's define two **events** (subsets of the sample space):
 
-- **Event A:** The outcome is **even** (2, 4, or 6)
-- **Event B:** The outcome is **greater than 3** (4, 5, or 6)
+-   **Event A:** The outcome is **even** (2, 4, or 6)
+-   **Event B:** The outcome is **greater than 3** (4, 5, or 6)
 
 ```{r}
 # here's a hint to get you started
@@ -288,7 +357,9 @@ cat("A:", A, "\n")
 cat("B:", B, "\n")
 ```
 
-> **What's `%%`?** It's the **modulo** (remainder) operator. `omega %% 2 == 0` checks which numbers are divisible by 2 (i.e., even).
+> **What's `%%`?** It's the **modulo** (remainder) operator.
+> `omega %% 2 == 0` checks which numbers are divisible by 2 (i.e.,
+> even).
 
 ### Computing probabilities
 
@@ -298,8 +369,10 @@ $$P(\text{event}) = \frac{\text{number of outcomes in the event}}{\text{total nu
 
 We also need:
 
-- **Intersection** $A \cap B$ — outcomes that are in *both* A and B. R function: `intersect(A, B)`
-- **Union** $A \cup B$ — outcomes that are in A *or* B (or both). R function: `union(A, B)`
+-   **Intersection** $A \cap B$ — outcomes that are in *both* A and B. R
+    function: `intersect(A, B)`
+-   **Union** $A \cup B$ — outcomes that are in A *or* B (or both). R
+    function: `union(A, B)`
 
 ```{r}
 n <- length(omega)
@@ -321,7 +394,8 @@ There's a fundamental rule in probability:
 
 $$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$
 
-We subtract $P(A \cap B)$ because outcomes in *both* events would otherwise be counted twice. Let's check this numerically:
+We subtract $P(A \cap B)$ because outcomes in *both* events would
+otherwise be counted twice. Let's check this numerically:
 
 ```{r}
 lhs <- P_A_or_B
@@ -333,13 +407,15 @@ cat("Equal?", isTRUE(all.equal(lhs, rhs)), "\n")
 
 ### Conditional Probability
 
-**Conditional probability** answers: "If I already know that event B happened, what's the probability of event A?"
+**Conditional probability** answers: "If I already know that event B
+happened, what's the probability of event A?"
 
 The formula is:
 
 $$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$
 
-In words: "out of all the outcomes where B is true, what fraction also satisfies A?"
+In words: "out of all the outcomes where B is true, what fraction also
+satisfies A?"
 
 #### Your turn
 
@@ -355,20 +431,25 @@ P_B_given_A <- P_A_and_B / P_A
 cat("P(B | A) =", P_B_given_A, "\n")
 ```
 
-#### Are P(A | B) and P(B | A) the same?
+#### Are P(A \| B) and P(B \| A) the same?
 
-**No!** P(A|B) = 2/3 ≈ 0.667, but P(B|A) = 1/2 = 0.5. They are different.
+**No!** P(A\|B) = 2/3 ≈ 0.667, but P(B\|A) = 1/2 = 0.5. They are
+different.
 
 **Why?** Because they ask different questions:
 
-- P(A|B) asks: "Given that the outcome is greater than 3, what's the chance it's also even?"
-- P(B|A) asks: "Given that the outcome is even, what's the chance it's also greater than 3?"
+-   P(A\|B) asks: "Given that the outcome is greater than 3, what's the
+    chance it's also even?"
+-   P(B\|A) asks: "Given that the outcome is even, what's the chance
+    it's also greater than 3?"
 
-The denominators are different (P(B) ≠ P(A)), so the answers are different. Conditional probability is **not symmetric**.
+The denominators are different (P(B) ≠ P(A)), so the answers are
+different. Conditional probability is **not symmetric**.
 
 ### Independence of Events
 
-Two events are **independent** if knowing that one occurred gives you **no information** about whether the other occurred. Mathematically:
+Two events are **independent** if knowing that one occurred gives you
+**no information** about whether the other occurred. Mathematically:
 
 $$\text{A and B are independent if } P(A \cap B) = P(A) \times P(B)$$
 
@@ -383,20 +464,26 @@ cat("Independent?", isTRUE(all.equal(P_A_and_B, product_P_A_P_B)), "\n")
 
 #### Does knowing B occurred change the probability of A?
 
-**Yes!** P(A|B) = 2/3, but P(A) = 1/2. Since P(A|B) ≠ P(A), knowing B occurred *does* change the probability of A, confirming the events are **dependent**.
+**Yes!** P(A\|B) = 2/3, but P(A) = 1/2. Since P(A\|B) ≠ P(A), knowing B
+occurred *does* change the probability of A, confirming the events are
+**dependent**.
 
-> **Key insight:** If events were independent, we'd have P(A|B) = P(A) — knowing B wouldn't change anything about A. When P(A|B) ≠ P(A), the events are dependent.
+> **Key insight:** If events were independent, we'd have P(A\|B) = P(A)
+> — knowing B wouldn't change anything about A. When P(A\|B) ≠ P(A), the
+> events are dependent.
 
 ### Conditional Probability from a Table
 
-Real-world data often comes in tables. Here's one that records smoking status and disease status for 300 people:
+Real-world data often comes in tables. Here's one that records smoking
+status and disease status for 300 people:
 
 |            | Disease | No Disease |
 |------------|---------|------------|
 | Smoker     | 30      | 70         |
 | Non-smoker | 20      | 180        |
 
-Let's store this as a **matrix** in R and compute some conditional probabilities:
+Let's store this as a **matrix** in R and compute some conditional
+probabilities:
 
 ```{r}
 smoking <- matrix(c(30, 70, 20, 180), nrow = 2, byrow = TRUE)
@@ -407,9 +494,11 @@ smoking
 
 Now we compute three probabilities:
 
-1. **P(Disease)** — What fraction of ALL people have the disease?
-2. **P(Disease | Smoker)** — Of the smokers, what fraction have the disease?
-3. **P(Smoker | Disease)** — Of the diseased people, what fraction are smokers?
+1.  **P(Disease)** — What fraction of ALL people have the disease?
+2.  **P(Disease \| Smoker)** — Of the smokers, what fraction have the
+    disease?
+3.  **P(Smoker \| Disease)** — Of the diseased people, what fraction are
+    smokers?
 
 ```{r}
 total <- sum(smoking)
@@ -441,7 +530,9 @@ cat("Independent?", isTRUE(all.equal(P_disease_and_smoker, expected_if_indep)), 
 # They are not equal, so smoking and disease are NOT independent.
 ```
 
-> **Interpretation:** P(Disease | Smoker) = 0.30 but P(Disease) = 0.167. Smokers have a *much* higher disease rate than the overall population. Smoking and disease are clearly **not** independent.
+> **Interpretation:** P(Disease \| Smoker) = 0.30 but P(Disease) =
+> 0.167. Smokers have a *much* higher disease rate than the overall
+> population. Smoking and disease are clearly **not** independent.
 
 ------------------------------------------------------------------------
 
@@ -449,7 +540,9 @@ cat("Independent?", isTRUE(all.equal(P_disease_and_smoker, expected_if_indep)), 
 
 ### Why visualise?
 
-Visualisation isn't just for making pretty pictures — it's often the **first step** in understanding data. A histogram, for example, shows you the *shape* of your data's distribution.
+Visualisation isn't just for making pretty pictures — it's often the
+**first step** in understanding data. A histogram, for example, shows
+you the *shape* of your data's distribution.
 
 ```{r}
 data <- rnorm(500, mean = 50, sd = 10)
@@ -460,11 +553,17 @@ hist(data, probability = TRUE,
 lines(density(data))
 ```
 
-> **What's happening here:** `rnorm(500, mean = 50, sd = 10)` generates 500 random numbers from a Normal distribution centred at 50. The histogram shows the shape, and `density(data)` draws a smooth curve through it. The `probability = TRUE` argument makes the y-axis show *density* instead of counts, so the histogram and density curve are on the same scale.
+> **What's happening here:** `rnorm(500, mean = 50, sd = 10)` generates
+> 500 random numbers from a Normal distribution centred at 50. The
+> histogram shows the shape, and `density(data)` draws a smooth curve
+> through it. The `probability = TRUE` argument makes the y-axis show
+> *density* instead of counts, so the histogram and density curve are on
+> the same scale.
 
 ### Effect of sample size
 
-What happens when we have more data? The histogram gets smoother and follows the true bell curve more closely:
+What happens when we have more data? The histogram gets smoother and
+follows the true bell curve more closely:
 
 ```{r}
 # Change the sample size and observe how the histogram and density change
@@ -482,8 +581,10 @@ lines(density(data_large), col = "blue", lwd = 2)
 
 The number of bars (bins) in a histogram matters a lot:
 
-- **Too few bins** (wide bars) — Over-smooths the data. You lose detail.
-- **Too many bins** (narrow bars) — Under-smooths the data. You see noise instead of the true pattern.
+-   **Too few bins** (wide bars) — Over-smooths the data. You lose
+    detail.
+-   **Too many bins** (narrow bars) — Under-smooths the data. You see
+    noise instead of the true pattern.
 
 ```{r}
 # Try a different bin width and comment on the effect
@@ -507,7 +608,9 @@ par(mfrow = c(1, 1))
 # variance — a theme that recurs in kernel density estimation.
 ```
 
-> **Takeaway:** Choosing the right bin width is a **bias-variance trade-off** — a concept that comes up again and again in statistics. We'll revisit this formally when we study kernel density estimation.
+> **Takeaway:** Choosing the right bin width is a **bias-variance
+> trade-off** — a concept that comes up again and again in statistics.
+> We'll revisit this formally when we study kernel density estimation.
 
 ------------------------------------------------------------------------
 
@@ -515,9 +618,13 @@ par(mfrow = c(1, 1))
 
 ### What is a list?
 
-A **list** is like a container that can hold **anything** — vectors, data frames, even other lists. Unlike vectors (which must contain all the same type), lists can mix numbers, text, dates, and more.
+A **list** is like a container that can hold **anything** — vectors,
+data frames, even other lists. Unlike vectors (which must contain all
+the same type), lists can mix numbers, text, dates, and more.
 
-**Why do we care?** In R, almost every function that fits a model (like `lm()`, `t.test()`, etc.) returns its results as a list. So understanding lists is essential for working with statistical output.
+**Why do we care?** In R, almost every function that fits a model (like
+`lm()`, `t.test()`, etc.) returns its results as a list. So
+understanding lists is essential for working with statistical output.
 
 ```{r}
 l <- list(
@@ -529,7 +636,8 @@ l <- list(
 str(l)
 ```
 
-> **`str()`** stands for "structure" — it shows you what's inside an object. Very useful for exploring lists!
+> **`str()`** stands for "structure" — it shows you what's inside an
+> object. Very useful for exploring lists!
 
 ------------------------------------------------------------------------
 
@@ -537,24 +645,32 @@ str(l)
 
 ### Where is R looking for files?
 
-R has a "working directory" — the folder it looks in when you ask it to open or save files. You can check the current working directory with:
+R has a "working directory" — the folder it looks in when you ask it to
+open or save files. You can check the current working directory with:
 
 ```{r}
 getwd()
 ```
 
-> **Heads up:** The working directory for your R Markdown file might be different from the one in the console below. This can cause confusion! The R Markdown file usually uses its own folder as the working directory.
+> **Heads up:** The working directory for your R Markdown file might be
+> different from the one in the console below. This can cause confusion!
+> The R Markdown file usually uses its own folder as the working
+> directory.
 
 ### Setting up a data folder
 
-It's good practice to organise your files. Let's create a subfolder for our data:
+It's good practice to organise your files. Let's create a subfolder for
+our data:
 
 ```{r}
 dir.create("lab0data", showWarnings = FALSE)
 setwd("lab0data")
 ```
 
-> **Note:** You might see a warning about `setwd()`. That's because inside R Markdown, changing the working directory only affects the current code chunk. A more reliable approach is to use the `here` package, which always gives paths relative to your project folder:
+> **Note:** You might see a warning about `setwd()`. That's because
+> inside R Markdown, changing the working directory only affects the
+> current code chunk. A more reliable approach is to use the `here`
+> package, which always gives paths relative to your project folder:
 
 ```{r}
 library(here)
@@ -567,7 +683,8 @@ file_path
 
 ### Reading a CSV file
 
-CSV (Comma-Separated Values) files are the most common way to store datasets. `read.csv()` loads them into a data frame:
+CSV (Comma-Separated Values) files are the most common way to store
+datasets. `read.csv()` loads them into a data frame:
 
 ```{r}
 housing <- read.csv("hp1602.csv")
@@ -576,10 +693,12 @@ str(housing)
 
 ### Saving and loading R objects
 
-You can save any R object to a file and load it back later. This is useful for **long-running analyses** — you don't want to re-run everything from scratch if R crashes!
+You can save any R object to a file and load it back later. This is
+useful for **long-running analyses** — you don't want to re-run
+everything from scratch if R crashes!
 
-- **`saveRDS()`** — saves a single R object to a file.
-- **`readRDS()`** — loads it back.
+-   **`saveRDS()`** — saves a single R object to a file.
+-   **`readRDS()`** — loads it back.
 
 ```{r}
 saveRDS(housing, "housing.rds")
@@ -604,29 +723,36 @@ summary(housing)
 
 ### Two ways to repeat a calculation
 
-In statistics, we often need to apply the same calculation to many columns, many groups, or many simulated datasets. R gives us two approaches:
+In statistics, we often need to apply the same calculation to many
+columns, many groups, or many simulated datasets. R gives us two
+approaches:
 
-1. **Loops** (`for`) — familiar from Python, but often slower in R.
-2. **Vectorised functions** (`sapply`, `apply`, etc.) — R's preferred way, usually faster and more concise.
+1.  **Loops** (`for`) — familiar from Python, but often slower in R.
+2.  **Vectorised functions** (`sapply`, `apply`, etc.) — R's preferred
+    way, usually faster and more concise.
 
-Here's `sapply()` computing the variance of every country column in the housing data:
+Here's `sapply()` computing the variance of every country column in the
+housing data:
 
 ```{r}
 housingVar <- sapply(housing[, -(1:3)], var)
 housingVar
 ```
 
-> **What's `housing[, -(1:3)]`?** It means "all columns *except* the first three." The minus sign removes columns by position.
+> **What's `housing[, -(1:3)]`?** It means "all columns *except* the
+> first three." The minus sign removes columns by position.
 
 ### Your turn: Loop vs sapply
 
-Let's compute the mean HPI (House Price Index) for each country, first with a loop, then with `sapply()`.
+Let's compute the mean HPI (House Price Index) for each country, first
+with a loop, then with `sapply()`.
 
 **The loop approach:**
 
-- `unique()` gives you the distinct values in a column.
-- `numeric(n)` creates an empty vector of length `n` to store results.
-- `seq_along()` generates indices 1, 2, 3, ... matching the length of the input.
+-   `unique()` gives you the distinct values in a column.
+-   `numeric(n)` creates an empty vector of length `n` to store results.
+-   `seq_along()` generates indices 1, 2, 3, ... matching the length of
+    the input.
 
 ```{r}
 # Compute the mean HPI for each country using a loop (loop over the countries)
@@ -653,7 +779,9 @@ mean_hpi_sapply
 all.equal(mean_hpi_loop, mean_hpi_sapply)
 ```
 
-> **Takeaway:** `sapply()` is more concise and often faster than a loop. Use it when you want to apply the same function to every element of a list or every column of a data frame.
+> **Takeaway:** `sapply()` is more concise and often faster than a loop.
+> Use it when you want to apply the same function to every element of a
+> list or every column of a data frame.
 
 ------------------------------------------------------------------------
 
@@ -663,11 +791,13 @@ all.equal(mean_hpi_loop, mean_hpi_sapply)
 
 Many data analysis tasks follow this three-step pattern:
 
-1. **Split** the data into groups (e.g., by country, by treatment group).
-2. **Apply** a function to each group (e.g., compute the mean).
-3. **Combine** the results back together.
+1.  **Split** the data into groups (e.g., by country, by treatment
+    group).
+2.  **Apply** a function to each group (e.g., compute the mean).
+3.  **Combine** the results back together.
 
-First, let's reshape the housing data from **wide format** (one column per country) to **long format** (one row per country-observation pair):
+First, let's reshape the housing data from **wide format** (one column
+per country) to **long format** (one row per country-observation pair):
 
 ```{r}
 housing_long <- reshape(
@@ -686,7 +816,10 @@ Now we can compute the average HPI by country using `tapply()`:
 tapply(housing_long$hpi, housing_long$country, mean)
 ```
 
-> **How `tapply()` works:** It takes a numeric vector (`housing_long$hpi`), splits it into groups defined by a factor (`housing_long$country`), applies a function (`mean`) to each group, and returns the results.
+> **How `tapply()` works:** It takes a numeric vector
+> (`housing_long$hpi`), splits it into groups defined by a factor
+> (`housing_long$country`), applies a function (`mean`) to each group,
+> and returns the results.
 
 ------------------------------------------------------------------------
 
@@ -694,18 +827,21 @@ tapply(housing_long$hpi, housing_long$country, mean)
 
 ### Why write functions?
 
-Functions let you **package up** a piece of logic so you can reuse it. Instead of copying and pasting the same code over and over, you write it once as a function and then call it whenever you need it.
+Functions let you **package up** a piece of logic so you can reuse it.
+Instead of copying and pasting the same code over and over, you write it
+once as a function and then call it whenever you need it.
 
 **The basic structure:**
 
-```r
+``` r
 my_function <- function(argument1, argument2) {
   # do something
   return(result)
 }
 ```
 
-Here's a simple function that returns the mean and standard deviation of a vector:
+Here's a simple function that returns the mean and standard deviation of
+a vector:
 
 ```{r}
 meansd <- function(x) {
@@ -721,7 +857,8 @@ tapply(housing_long$hpi, housing_long$country, meansd)
 
 ### Your turn: Improve the function
 
-Let's add the sample size (`n`) to the output, and make it handle missing values (`NA`s) gracefully:
+Let's add the sample size (`n`) to the output, and make it handle
+missing values (`NA`s) gracefully:
 
 ```{r}
 # Modify meansd() to also return the sample size
@@ -737,7 +874,9 @@ meansd(c(1, 2, 3, NA, 5))
 tapply(housing_long$hpi, housing_long$country, meansd)
 ```
 
-> **What's `!is.na(x)`?** It means "NOT missing". `is.na(x)` returns `TRUE` for each `NA` value, and `!` flips it. So `x[!is.na(x)]` keeps only the non-missing values.
+> **What's `!is.na(x)`?** It means "NOT missing". `is.na(x)` returns
+> `TRUE` for each `NA` value, and `!` flips it. So `x[!is.na(x)]` keeps
+> only the non-missing values.
 
 ------------------------------------------------------------------------
 
@@ -745,14 +884,21 @@ tapply(housing_long$hpi, housing_long$country, meansd)
 
 ### What is simulation?
 
-**Simulation** means generating fake data from a known model, then studying what happens. It's one of the most powerful tools in modern statistics because it lets you answer questions like:
+**Simulation** means generating fake data from a known model, then
+studying what happens. It's one of the most powerful tools in modern
+statistics because it lets you answer questions like:
 
-- "How reliable is this estimate?" (by repeating the experiment thousands of times)
-- "Does my method work correctly?" (by testing it on data where you know the true answer)
+-   "How reliable is this estimate?" (by repeating the experiment
+    thousands of times)
+-   "Does my method work correctly?" (by testing it on data where you
+    know the true answer)
 
 ### The sampling distribution of the mean
 
-If we take a sample of 50 numbers from a Normal distribution and compute the mean, we'll get *some* number. If we repeat this 1000 times, those 1000 means form a **sampling distribution** — it tells us how much the sample mean varies from sample to sample.
+If we take a sample of 50 numbers from a Normal distribution and compute
+the mean, we'll get *some* number. If we repeat this 1000 times, those
+1000 means form a **sampling distribution** — it tells us how much the
+sample mean varies from sample to sample.
 
 ```{r}
 simulate_mean <- function(n) mean(rnorm(n))
@@ -762,14 +908,17 @@ hist(means, probability = TRUE)
 lines(density(means))
 ```
 
-> **`replicate(1000, ...)`** runs the expression inside it 1000 times and collects the results. It's like a super-compact loop.
+> **`replicate(1000, ...)`** runs the expression inside it 1000 times
+> and collects the results. It's like a super-compact loop.
 
 ### The Central Limit Theorem in action
 
-What happens if we change the sample size? The **Central Limit Theorem** says that as the sample size increases, the sampling distribution of the mean becomes:
+What happens if we change the sample size? The **Central Limit Theorem**
+says that as the sample size increases, the sampling distribution of the
+mean becomes:
 
-- More **concentrated** around the true mean (less spread)
-- More **bell-shaped** (even if the original data isn't normal!)
+-   More **concentrated** around the true mean (less spread)
+-   More **bell-shaped** (even if the original data isn't normal!)
 
 ```{r}
 # Change the sample size n and observe the effect on the sampling distribution
@@ -792,19 +941,24 @@ par(mfrow = c(1, 1))
 # illustrating the Central Limit Theorem in action.
 ```
 
-> **What to notice:** With n = 5, the sample means are all over the place (spread from −1 to +1). With n = 500, they're tightly clustered around 0 (the true mean). This is the CLT in action!
+> **What to notice:** With n = 5, the sample means are all over the
+> place (spread from −1 to +1). With n = 500, they're tightly clustered
+> around 0 (the true mean). This is the CLT in action!
 
 ------------------------------------------------------------------------
 
 ## Exercises
 
-These exercises bring together all the skills from the lab. Each one builds on what you've learned above.
+These exercises bring together all the skills from the lab. Each one
+builds on what you've learned above.
 
-1. **Compute the correlation** between US and Canada HPI.
-2. **Use simulation** (bootstrapping) to estimate how uncertain that correlation is.
-3. **Write a function** that returns the minimum, median, and maximum of a numeric vector.
-4. **Apply your function** to HPI values for each country.
-5. **(Advanced)** Plot the distribution of simulated correlations.
+1.  **Compute the correlation** between US and Canada HPI.
+2.  **Use simulation** (bootstrapping) to estimate how uncertain that
+    correlation is.
+3.  **Write a function** that returns the minimum, median, and maximum
+    of a numeric vector.
+4.  **Apply your function** to HPI values for each country.
+5.  **(Advanced)** Plot the distribution of simulated correlations.
 
 ```{r}
 # Exercise 1: Correlation between US and Canada HPI
@@ -812,7 +966,9 @@ cor_us_canada <- cor(housing$US, housing$Canada, use = "complete.obs")
 cat("Correlation between US and Canada HPI:", cor_us_canada, "\n")
 ```
 
-> **What's correlation?** It measures how strongly two variables move together. Values range from −1 (perfectly opposite) to +1 (perfectly together). A value near 0 means no linear relationship.
+> **What's correlation?** It measures how strongly two variables move
+> together. Values range from −1 (perfectly opposite) to +1 (perfectly
+> together). A value near 0 means no linear relationship.
 
 ```{r}
 # Exercise 2: Use simulation (bootstrap) to estimate uncertainty
@@ -828,7 +984,12 @@ cat("95% CI: [", quantile(boot_cors, 0.025), ",",
     quantile(boot_cors, 0.975), "]\n")
 ```
 
-> **What's bootstrapping?** We resample our data *with replacement* (some rows get picked multiple times, some are left out), compute the correlation on each resampled dataset, and repeat 1000 times. The spread of those 1000 correlations tells us how uncertain our estimate is. The 95% CI means: "we're 95% confident the true correlation falls in this range."
+> **What's bootstrapping?** We resample our data *with replacement*
+> (some rows get picked multiple times, some are left out), compute the
+> correlation on each resampled dataset, and repeat 1000 times. The
+> spread of those 1000 correlations tells us how uncertain our estimate
+> is. The 95% CI means: "we're 95% confident the true correlation falls
+> in this range."
 
 ```{r}
 # Exercise 3: Function returning min, median, max
@@ -869,12 +1030,17 @@ legend("topleft",
 
 By the end of this lab you should feel comfortable with:
 
-- ✅ **Vectors and data frames** — R's core data structures
-- ✅ **Indexing and logical filtering** — extracting and subsetting data
-- ✅ **Probability in R** — computing P(A), P(A|B), and checking independence
-- ✅ **Visualisation** — histograms, density plots, and the bias-variance trade-off in bin width
-- ✅ **Writing functions** — packaging up reusable logic
-- ✅ **Loops vs sapply** — two ways to repeat computations
-- ✅ **Simulation** — generating data to study statistical properties (like the CLT)
+-   ✅ **Vectors and data frames** — R's core data structures
+-   ✅ **Indexing and logical filtering** — extracting and subsetting
+    data
+-   ✅ **Probability in R** — computing P(A), P(A\|B), and checking
+    independence
+-   ✅ **Visualisation** — histograms, density plots, and the
+    bias-variance trade-off in bin width
+-   ✅ **Writing functions** — packaging up reusable logic
+-   ✅ **Loops vs sapply** — two ways to repeat computations
+-   ✅ **Simulation** — generating data to study statistical properties
+    (like the CLT)
 
-These skills form the **foundation** for everything else in this module. You'll use them in every single future lab! 🚀
+These skills form the **foundation** for everything else in this module.
+You'll use them in every single future lab! 🚀
