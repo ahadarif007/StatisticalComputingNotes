@@ -1,0 +1,685 @@
+---
+title: "Statistical Computing — Week 9: Regression Mixtures, Multivariate Mixtures & Gamma GLMs"
+subtitle: "Complete Lab Solutions with Exam-Ready Explanations"
+author: "Week 9 Lab"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    highlight: tango
+    latex_engine: xelatex
+    extra_dependencies: ["amsmath", "amssymb", "float"]
+header-includes:
+  - \usepackage{framed}
+  - \usepackage{xcolor}
+  - \definecolor{examtip}{RGB}{0, 100, 150}
+  - \definecolor{shadecolor}{RGB}{230, 240, 250}
+  - \newcommand{\examtip}[1]{\begin{snugshade}\textcolor{examtip}{\textbf{Exam Tip:}} #1\end{snugshade}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 5,
+                      fig.pos = "H", out.width = "85%", fig.align = "center")
+options(digits = 4)
+```
+
+\newpage
+
+# Background Theory You Must Know
+
+## Mixture of Regressions
+
+In a standard regression, every data point follows the **same** linear relationship. But what if the data comes from **two different groups**, each with its own regression line?
+
+A **mixture of regressions** assumes:
+
+$$y_i \sim \begin{cases} N(\beta_0^{(1)} + \beta_1^{(1)} x_i,\; \sigma^2) & \text{with probability } \lambda \\ N(\beta_0^{(2)} + \beta_1^{(2)} x_i,\; \sigma^2) & \text{with probability } 1-\lambda \end{cases}$$
+
+The EM algorithm simultaneously:
+
+- **Estimates** which group each point belongs to (E-step)
+- **Fits** separate regression lines for each group (M-step)
+
+This is useful when group labels are **unknown** — the algorithm discovers them from the data.
+
+\examtip{In \texttt{regmixEM()}: setting \texttt{arbvar = FALSE} forces both components to share the same error variance $\sigma^2$. This is a simpler model (fewer parameters) and is often appropriate when the groups differ in intercept/slope but not in noise level.}
+
+## Interaction Models in lm()
+
+When you fit `lm(y ~ group * x)`, R gives you four coefficients:
+
+| Coefficient | Meaning |
+|---|---|
+| `(Intercept)` | Intercept for the **reference** group |
+| `groupB` | **Difference** in intercept (Group B $-$ Group A) |
+| `x` | Slope for the **reference** group |
+| `groupB:x` | **Difference** in slope (Group B $-$ Group A) |
+
+So the fitted lines are:
+
+- **Group A (reference):** $\hat{y} = \beta_0 + \beta_2 x$
+- **Group B:** $\hat{y} = (\beta_0 + \beta_1) + (\beta_2 + \beta_3) x$
+
+\examtip{This is exactly how you extract the two regression lines from an interaction model. The reference group uses coefficients 1 and 3; the other group \textbf{adds} coefficients 2 and 4.}
+
+## Multivariate Normal Mixtures
+
+For 2D data (like Old Faithful or flow cytometry), each component is a **bivariate Normal**:
+
+$$\mathbf{x} \sim \sum_{k=1}^{K} \lambda_k \, \mathcal{N}(\boldsymbol{\mu}_k, \boldsymbol{\Sigma}_k)$$
+
+Each component has: 2 means + 3 unique covariance parameters (var of $X$, var of $Y$, covariance) = **5 parameters per component**, plus $K-1$ free mixing weights.
+
+$$\text{Total parameters for } K \text{ components} = 6K - 1$$
+
+## Gamma Regression
+
+When the response is **continuous, positive, and right-skewed** (e.g. waiting times, rainfall, hospital stays), a Normal linear model is inappropriate because:
+
+1. Normal models can predict **negative** values
+2. The variance of positive skewed data usually **increases with the mean**
+
+Gamma regression solves both problems. With a **log link**:
+
+$$\log(\mu_i) = \beta_0 + \beta_1 x_{i1} + \cdots \quad \Longleftrightarrow \quad \mu_i = e^{\beta_0 + \beta_1 x_{i1} + \cdots}$$
+
+This guarantees $\mu_i > 0$ and the coefficients have a **multiplicative** interpretation:
+
+$$\exp(\beta_1) = \text{multiplicative effect of a 1-unit increase in } x_1$$
+
+\examtip{In Gamma GLM: \texttt{exp(coef)} gives you \textbf{multiplicative} effects. For example, $\exp(\beta) = 1.15$ means a 1-unit increase in $x$ \textbf{multiplies} the expected response by 1.15 (i.e.\ a 15\% increase). For a $c$-unit increase: $\exp(c \cdot \beta)$.}
+
+\newpage
+
+# Setup
+
+```{r packages, eval=FALSE}
+install.packages(c("MASS", "mixtools", "hexbin"),
+                 repos = "https://cloud.r-project.org")
+```
+
+```{r load-packages}
+library(MASS)
+library(mixtools)
+```
+
+\newpage
+
+# Part 1: Mixture of Regressions — Whiteside Gas Data
+
+## Q1: Plot Gas vs Temperature by Insulation Status
+
+```{r q1-plot}
+library(MASS)
+head(whiteside)
+str(whiteside)
+
+# Colour by insulation status
+plot(Gas ~ Temp, data = whiteside,
+     col = ifelse(Insul == "Before", 2, 4), pch = 16,
+     xlab = "Outside Temperature (°C)",
+     ylab = "Gas Consumption (1000 cu ft)",
+     main = "Gas Consumption vs Temperature")
+legend("topright", pch = 16, col = c(2, 4),
+       legend = c("Before Insulation", "After Insulation"))
+```
+
+**Comment:** There is a clear **negative relationship** — as temperature increases, gas consumption decreases (you need less heating). The "Before" points (red) sit **above** the "After" points (blue), meaning insulation reduced gas consumption. The slopes also look slightly different, suggesting the insulation changed the rate at which gas use responds to temperature.
+
+## Q2: Fit an Interaction Model
+
+The interaction model `Gas ~ Insul * Temp` gives separate intercepts and slopes for each insulation period:
+
+```{r q2-interaction}
+fit_lm <- lm(Gas ~ Insul * Temp, data = whiteside)
+summary(fit_lm)$coef
+```
+
+**How to read the coefficients:**
+
+```{r q2-extract}
+cc <- coef(fit_lm)
+cat("BEFORE insulation:  intercept =", cc[1],
+    "  slope =", cc[3], "\n")
+cat("AFTER insulation:   intercept =", cc[1] + cc[2],
+    "  slope =", cc[3] + cc[4], "\n")
+```
+
+> - Coefficients 1 and 3 → **Before** line (reference group)
+> - Add coefficients 2 and 4 → **After** line
+
+```{r q2-plot-lines}
+plot(Gas ~ Temp, data = whiteside,
+     col = ifelse(Insul == "Before", 2, 4), pch = 16,
+     xlab = "Temperature (°C)", ylab = "Gas Consumption",
+     main = "Interaction Model: Separate Lines")
+legend("topright", pch = 16, col = c(2, 4),
+       legend = c("Before", "After"), lwd = 2)
+
+# Before line
+abline(cc[1], cc[3], col = 2, lwd = 2)
+# After line
+abline(cc[1] + cc[2], cc[3] + cc[4], col = 4, lwd = 2)
+```
+
+\examtip{The interaction term \texttt{Insul:Temp} tests whether the \textbf{slope} differs between the two groups. If its p-value is significant, the groups don't just differ in level — they respond to temperature differently.}
+
+## Q3: Fit a Regression Mixture (Pretending We Don't Know Groups)
+
+Now we **ignore** the insulation labels and let the mixture model discover the two groups automatically:
+
+```{r q3-regmix}
+library(mixtools)
+
+set.seed(42)
+fit.mix <- with(whiteside,
+                regmixEM(Gas, Temp, arbvar = FALSE, k = 2))
+
+summary(fit.mix)
+```
+
+**Key output to understand:**
+
+- `fit.mix$beta` — the regression coefficients for each component (columns = components)
+- `fit.mix$sigma` — the shared error standard deviation
+- `fit.mix$lambda` — the mixing proportions
+
+```{r q3-params}
+cat("Component 1: intercept =", fit.mix$beta[1,1],
+    " slope =", fit.mix$beta[2,1], "\n")
+cat("Component 2: intercept =", fit.mix$beta[1,2],
+    " slope =", fit.mix$beta[2,2], "\n")
+cat("Mixing proportions:", fit.mix$lambda, "\n")
+cat("Shared sigma:", fit.mix$sigma, "\n")
+```
+
+## Q4: Plot the Mixture Lines (No Colour-Coding)
+
+```{r q4-mixture-plot}
+plot(Gas ~ Temp, data = whiteside, pch = 16, col = "grey40",
+     xlab = "Temperature (°C)", ylab = "Gas Consumption",
+     main = "Regression Mixture (Groups Unknown)")
+
+# Mixture component 1
+abline(fit.mix$beta[1,1], fit.mix$beta[2,1], col = 2, lwd = 2, lty = 1)
+# Mixture component 2
+abline(fit.mix$beta[1,2], fit.mix$beta[2,2], col = 4, lwd = 2, lty = 1)
+
+legend("topright", lwd = 2, col = c(2, 4),
+       legend = c("Component 1", "Component 2"))
+```
+
+**Comparison with the interaction model:**
+
+```{r q4-compare}
+cat("--- Interaction Model (lm) ---\n")
+cat("Before: intercept =", round(cc[1], 3),
+    " slope =", round(cc[3], 3), "\n")
+cat("After:  intercept =", round(cc[1]+cc[2], 3),
+    " slope =", round(cc[3]+cc[4], 3), "\n\n")
+
+cat("--- Mixture Model (regmixEM) ---\n")
+cat("Comp 1: intercept =", round(fit.mix$beta[1,1], 3),
+    " slope =", round(fit.mix$beta[2,1], 3), "\n")
+cat("Comp 2: intercept =", round(fit.mix$beta[1,2], 3),
+    " slope =", round(fit.mix$beta[2,2], 3), "\n")
+```
+
+> The mixture model should recover coefficients very close to the interaction model — even though it **never saw** the insulation labels. This is the power of the EM algorithm.
+
+## Q5: Check How Well the Mixture Recovered the True Groups
+
+```{r q5-posterior}
+# Assign each observation to the component with highest posterior probability
+assigned <- ifelse(fit.mix$posterior[, 1] > 0.5, "Component 1", "Component 2")
+
+# Compare to the true insulation status
+confusion <- table(assigned, whiteside$Insul)
+print(confusion)
+
+# Classification accuracy
+accuracy <- sum(diag(confusion)) / sum(confusion) * 100
+cat("\nClassification accuracy:", round(accuracy, 1), "%\n")
+```
+
+> The mixture model should classify most observations correctly. Any misclassified points are likely near the boundary where the two groups overlap.
+
+\examtip{The posterior matrix \texttt{fit.mix\$posterior} has one row per observation and one column per component. Each row sums to 1. Values near 0.5 indicate the model is uncertain about that point's group membership.}
+
+\newpage
+
+# Part 2: Old Faithful — 2D Mixtures
+
+## Q6: Plot Waiting vs Eruption Times
+
+```{r q6-faithful}
+head(faithful)
+
+plot(eruptions ~ waiting, data = faithful,
+     pch = 16, col = rgb(0, 0, 0.6, 0.5), cex = 0.8,
+     xlab = "Waiting Time (min)",
+     ylab = "Eruption Duration (min)",
+     main = "Old Faithful: Eruptions vs Waiting")
+```
+
+**Comment:** Two clear clusters are visible — one with short eruptions and short waits, another with long eruptions and long waits. This suggests two underlying regimes.
+
+## Q7: Fit 2- and 3-Component Multivariate Mixtures
+
+```{r q7-mvmix}
+set.seed(42)
+faith_data <- as.matrix(faithful)  # mvnormalmixEM needs a matrix
+
+mv2 <- mvnormalmixEM(faith_data, k = 2, maxit = 1000)
+mv3 <- mvnormalmixEM(faith_data, k = 3, maxit = 1000)
+```
+
+```{r q7-plot, fig.height=7}
+par(mfrow = c(1, 2))
+plot(mv2, whichplots = 2, main2 = "2-Component Fit")
+plot(mv3, whichplots = 2, main2 = "3-Component Fit")
+```
+
+## Q8: AIC and BIC
+
+For a $K$-component bivariate Normal mixture: **parameters = $6K - 1$**
+
+(2 means + 3 covariance entries per component + $K-1$ mixing weights)
+
+```{r q8-aic-bic}
+n_faith <- nrow(faithful)
+
+# Log-likelihood for multivariate mixture
+mvmix_loglik <- function(fit) {
+  X <- fit$x
+  ll <- 0
+  for (i in 1:nrow(X)) {
+    li <- 0
+    for (j in 1:length(fit$lambda)) {
+      li <- li + fit$lambda[j] *
+        dmvnorm_manual(X[i, ], fit$mu[[j]], fit$sigma[[j]])
+    }
+    ll <- ll + log(li)
+  }
+  ll
+}
+
+# Manual bivariate normal density
+dmvnorm_manual <- function(x, mu, sigma) {
+  d <- length(mu)
+  diff <- x - mu
+  exp(-0.5 * t(diff) %*% solve(sigma) %*% diff) /
+    (sqrt((2 * pi)^d * det(sigma)))
+}
+
+ll2 <- mvmix_loglik(mv2)
+ll3 <- mvmix_loglik(mv3)
+
+k2 <- 6 * 2 - 1   # = 11 parameters
+k3 <- 6 * 3 - 1   # = 17 parameters
+
+aic2 <- -2 * ll2 + 2 * k2
+aic3 <- -2 * ll3 + 2 * k3
+bic2 <- -2 * ll2 + k2 * log(n_faith)
+bic3 <- -2 * ll3 + k3 * log(n_faith)
+
+results <- data.frame(
+  K = c(2, 3),
+  Parameters = c(k2, k3),
+  LogLik = round(c(ll2, ll3), 2),
+  AIC = round(c(aic2, aic3), 2),
+  BIC = round(c(bic2, bic3), 2)
+)
+print(results)
+
+cat("\nPreferred by AIC:", results$K[which.min(results$AIC)], "components\n")
+cat("Preferred by BIC:", results$K[which.min(results$BIC)], "components\n")
+```
+
+> The 2-component model should be preferred — Old Faithful has two clear clusters, not three. BIC in particular penalises the extra parameters of the 3-component model.
+
+\examtip{For bivariate mixtures: parameters = $6K - 1$. For $d$-dimensional data: each component has $d$ means + $d(d+1)/2$ covariance parameters, plus $K-1$ mixing weights. Total = $K\left(d + \frac{d(d+1)}{2}\right) + K - 1$.}
+
+\newpage
+
+# Part 3: Flow Cytometry — Multivariate Mixtures
+
+## Load and Visualise the Data
+
+```{r q-flow-load}
+load("Flow.RData")   # loads data frame FC
+str(FC)
+head(FC)
+```
+
+```{r q-flow-scatter}
+plot(FL3.H ~ FL1.H, data = FC, pch = 16, cex = 0.3,
+     col = rgb(0, 0, 0, 0.2),
+     main = "Flow Cytometry Data", xlab = "FL1.H", ylab = "FL3.H")
+```
+
+```{r q-flow-hex, fig.height=5}
+library(hexbin)
+hexbinplot(FL3.H ~ FL1.H, data = FC,
+           main = "Flow Cytometry — 2D Histogram",
+           colramp = colorRampPalette(c("grey95", "steelblue", "darkblue")))
+```
+
+**Comment:** Three populations are visible in the 2D histogram — these correspond to **alive**, **injured**, and **dead** cells.
+
+## Subsample and Fit Mixtures
+
+```{r q-flow-fit}
+set.seed(54321)
+X <- FC[sample(1:nrow(FC), size = 1000), ]
+
+m2 <- mvnormalmixEM(X, k = 2, maxit = 1000)
+m3 <- mvnormalmixEM(X, k = 3, maxit = 1000)
+```
+
+## Q9: Plot Fitted Densities
+
+```{r q9-flow-plot, fig.height=7}
+par(mfrow = c(1, 2))
+plot(m2, whichplots = 2, main2 = "2-Component Fit")
+plot(m3, whichplots = 2, main2 = "3-Component Fit")
+```
+
+**Comment:** The 3-component model should capture all three populations (alive, injured, dead). The 2-component model is forced to merge two of these groups into one, giving a poorer description.
+
+## Q10: AIC and BIC
+
+```{r q10-aic-bic}
+n_flow <- nrow(X)
+
+ll_m2 <- mvmix_loglik(m2)
+ll_m3 <- mvmix_loglik(m3)
+
+# Bivariate: 6K - 1 parameters
+k_m2 <- 6 * 2 - 1  # = 11
+k_m3 <- 6 * 3 - 1  # = 17
+
+flow_results <- data.frame(
+  K = c(2, 3),
+  Parameters = c(k_m2, k_m3),
+  LogLik = round(c(ll_m2, ll_m3), 2),
+  AIC = round(c(-2*ll_m2 + 2*k_m2, -2*ll_m3 + 2*k_m3), 2),
+  BIC = round(c(-2*ll_m2 + k_m2*log(n_flow), -2*ll_m3 + k_m3*log(n_flow)), 2)
+)
+print(flow_results)
+
+cat("\nPreferred by AIC:", flow_results$K[which.min(flow_results$AIC)], "components\n")
+cat("Preferred by BIC:", flow_results$K[which.min(flow_results$BIC)], "components\n")
+```
+
+> Both criteria should prefer the **3-component** model, consistent with the three cell populations visible in the data and in the plots.
+
+## Q11: Interpret the Mixing Proportions
+
+```{r q11-lambda}
+cat("Mixing proportions (3-component model):\n")
+cat("  Component 1:", round(m3$lambda[1], 3), "\n")
+cat("  Component 2:", round(m3$lambda[2], 3), "\n")
+cat("  Component 3:", round(m3$lambda[3], 3), "\n")
+```
+
+**Interpretation:** The three mixing proportions $\lambda_1, \lambda_2, \lambda_3$ estimate the **proportion of cells** in each population:
+
+- One component corresponds to **alive** cells
+- One to **injured** cells
+- One to **dead** cells
+
+These proportions are of **practical importance** because they tell the food scientist:
+
+- What fraction of bacterial spores **survived** the heat treatment (alive)
+- What fraction were **damaged but not killed** (injured — potentially dangerous because they could recover)
+- What fraction were **killed** (dead — the goal of the treatment)
+
+This information directly informs whether the heat treatment was effective enough for food safety.
+
+\examtip{In applied mixture models, the mixing proportions $\lambda_k$ estimate the relative sizes of the sub-populations. This is often the most important output — more important than the component means and variances.}
+
+\newpage
+
+# Part 4: Gamma Regression
+
+## Theory Recap
+
+In a Gamma GLM with log link:
+
+$$\log(\mu_i) = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \cdots$$
+
+**Interpreting coefficients on the original scale:**
+
+- $\exp(\beta_j)$ = the factor by which $\mu$ is **multiplied** for a 1-unit increase in $x_j$
+- $\exp(\beta_j) = 1.20$ means a 20\% increase in the expected response
+- $\exp(\beta_j) = 0.85$ means a 15\% decrease in the expected response
+- For a $c$-unit increase: multiply by $\exp(c \cdot \beta_j)$
+
+## Q12: Irish Rainfall — Histogram
+
+```{r q12-rainfall-data}
+rainfall <- data.frame(
+  rainfall = c(832, 1420, 912, 765, 1105, 2301, 1893, 943, 721, 1056,
+               1432, 887, 2156, 1678, 934, 812, 743, 1234, 956, 1876,
+               2043, 765, 1123, 987, 1654, 821, 1345, 1087, 2234, 1456),
+  altitude = c(12, 245, 67, 34, 189, 523, 412, 78, 23, 156,
+               267, 45, 489, 378, 89, 31, 19, 213, 112, 401,
+               445, 28, 198, 134, 356, 41, 278, 167, 501, 312),
+  west = c(0, 1, 0, 0, 1, 1, 1, 0, 0, 1,
+           1, 0, 1, 1, 0, 0, 0, 1, 0, 1,
+           1, 0, 1, 0, 1, 0, 1, 1, 1, 1)
+)
+```
+
+```{r q12-histogram}
+hist(rainfall$rainfall, breaks = 15, col = "lightblue", border = "white",
+     main = "Annual Rainfall at 30 Irish Stations",
+     xlab = "Rainfall (mm)")
+```
+
+**Comment:** The distribution is **right-skewed** — most stations have moderate rainfall but a few have very high values. The data is also strictly **positive**. Both features make Gamma regression a sensible choice: it naturally handles positive, skewed responses, and the variance increases with the mean (unlike Normal regression which assumes constant variance).
+
+## Q13: Fit Gamma GLM — Rainfall
+
+```{r q13-gamma-fit}
+fit_rain <- glm(rainfall ~ altitude + west,
+                family = Gamma(link = "log"),
+                data = rainfall)
+summary(fit_rain)
+```
+
+### Interpret the Coefficients
+
+```{r q13-interpret}
+cat("Coefficients (log scale):\n")
+print(round(coef(fit_rain), 5))
+
+cat("\nExponentiated coefficients (multiplicative effects):\n")
+print(round(exp(coef(fit_rain)), 4))
+```
+
+**Multiplicative effect of being on the west coast:**
+
+```{r q13-west}
+exp_west <- exp(coef(fit_rain)["west"])
+cat("exp(beta_west) =", round(exp_west, 3), "\n")
+cat("Interpretation: Stations on the west coast have",
+    round((exp_west - 1) * 100, 1),
+    "% more rainfall than east coast stations\n",
+    "(holding altitude constant).\n")
+```
+
+**Percentage increase in rainfall per 100m of altitude:**
+
+```{r q13-altitude}
+exp_alt_100 <- exp(100 * coef(fit_rain)["altitude"])
+cat("exp(100 * beta_altitude) =", round(exp_alt_100, 3), "\n")
+cat("Interpretation: Every 100m gain in altitude multiplies\n",
+    "expected rainfall by", round(exp_alt_100, 3),
+    "(a", round((exp_alt_100 - 1) * 100, 1), "% increase).\n")
+```
+
+\examtip{For a $c$-unit increase, compute $\exp(c \times \hat{\beta})$. Don't just multiply $\exp(\hat{\beta})$ by $c$ — that's wrong! The correct approach: multiply the \textbf{coefficient} by $c$, THEN exponentiate.}
+
+## Q14: Hospital Length of Stay — Histogram
+
+```{r q14-hospital-data}
+set.seed(42)
+n <- 50
+age <- round(runif(n, 30, 80))
+severity <- round(runif(n, 1, 10))
+compl <- rbinom(n, 1, prob = 0.3)
+log.stay <- 0.8 + 0.012 * age + 0.08 * severity + 0.5 * compl +
+  rnorm(n, sd = 0.3)
+stay <- round(exp(log.stay), 1)
+hospital <- data.frame(stay, age, severity, complication = factor(compl))
+```
+
+```{r q14-histogram}
+par(mfrow = c(1, 2))
+hist(hospital$stay, breaks = 15, col = "salmon", border = "white",
+     main = "Length of Stay (days)", xlab = "Days")
+
+# Show why Normal is bad: Q-Q plot
+qqnorm(hospital$stay, main = "Normal Q-Q Plot")
+qqline(hospital$stay, col = "red", lwd = 2)
+```
+
+**Comment:** The distribution is **right-skewed** — most stays are short, but a few patients stay much longer. The Q-Q plot shows clear departure from normality in the upper tail. A Normal linear model would be a poor choice because:
+
+1. It could predict **negative** stays (nonsensical)
+2. It assumes **constant variance**, but longer stays clearly have more variability
+3. The residuals would be non-Normal
+
+Gamma regression addresses all three issues.
+
+## Q15: Fit Gamma GLM — Hospital Stay
+
+```{r q15-gamma-hospital}
+fit_hosp <- glm(stay ~ age + severity + complication,
+                family = Gamma(link = "log"),
+                data = hospital)
+summary(fit_hosp)
+```
+
+## Q16: Interpret Exponentiated Coefficients
+
+```{r q16-interpret}
+cat("Exponentiated coefficients:\n")
+round(exp(coef(fit_hosp)), 3)
+```
+
+**Multiplicative effect of a complication:**
+
+```{r q16-complication}
+exp_compl <- exp(coef(fit_hosp)["complication1"])
+cat("exp(beta_complication) =", round(exp_compl, 3), "\n")
+cat("Interpretation: Patients who develop a complication have an expected\n",
+    "length of stay that is", round(exp_compl, 3), "times longer\n",
+    "(i.e.", round((exp_compl - 1) * 100, 1), "% longer)\n",
+    "compared to patients without complications,\n",
+    "holding age and severity constant.\n")
+```
+
+**Effect of each additional year of age:**
+
+```{r q16-age}
+exp_age <- exp(coef(fit_hosp)["age"])
+cat("exp(beta_age) =", round(exp_age, 4), "\n")
+cat("Interpretation: Each additional year of age multiplies\n",
+    "expected stay by", round(exp_age, 4),
+    "(a", round((exp_age - 1) * 100, 2), "% increase per year).\n")
+```
+
+**Effect per decade of age:**
+
+```{r q16-age10}
+exp_age10 <- exp(10 * coef(fit_hosp)["age"])
+cat("Per 10-year increase:", round(exp_age10, 3),
+    "(", round((exp_age10 - 1) * 100, 1), "% increase)\n")
+```
+
+## Q17: Likelihood Ratio Tests for Significance
+
+We use `anova()` with `test = "LRT"` to test each predictor:
+
+```{r q17-lrt}
+# Method 1: Drop each predictor one at a time
+anova(fit_hosp, test = "LRT")
+```
+
+We can also build nested models and compare explicitly:
+
+```{r q17-nested}
+# Full model
+fit_full <- glm(stay ~ age + severity + complication,
+                family = Gamma(link = "log"), data = hospital)
+
+# Drop age
+fit_no_age <- glm(stay ~ severity + complication,
+                  family = Gamma(link = "log"), data = hospital)
+
+# Drop severity
+fit_no_sev <- glm(stay ~ age + complication,
+                  family = Gamma(link = "log"), data = hospital)
+
+# Drop complication
+fit_no_comp <- glm(stay ~ age + severity,
+                   family = Gamma(link = "log"), data = hospital)
+
+cat("LRT: Drop age\n")
+print(anova(fit_no_age, fit_full, test = "LRT"))
+
+cat("\nLRT: Drop severity\n")
+print(anova(fit_no_sev, fit_full, test = "LRT"))
+
+cat("\nLRT: Drop complication\n")
+print(anova(fit_no_comp, fit_full, test = "LRT"))
+```
+
+**Interpretation:** A small p-value ($< 0.05$) means that predictor is **significant** — removing it would significantly worsen the model. A large p-value means the predictor can be safely dropped.
+
+> Since we know the true data-generating process (we simulated it!), all three predictors should be significant. In real data, you use this to decide which predictors to keep.
+
+\examtip{The LRT for GLMs uses deviance: $\Lambda = \text{Deviance}_{\text{reduced}} - \text{Deviance}_{\text{full}}$, which is compared to a $\chi^2$ distribution with df = difference in number of parameters. In R, \texttt{anova(reduced, full, test = "LRT")} does this automatically.}
+
+\newpage
+
+# Complete Exam Summary
+
+## Key Formulas
+
+| Topic | Formula |
+|---|---|
+| Regression mixture | $y \sim \lambda \, N(\beta_0^{(1)} + \beta_1^{(1)}x, \sigma^2) + (1-\lambda)\, N(\beta_0^{(2)} + \beta_1^{(2)}x, \sigma^2)$ |
+| Interaction model coefficients | Reference: $\beta_0, \beta_2$. Other group: $\beta_0 + \beta_1, \beta_2 + \beta_3$ |
+| Bivariate mixture parameters | $6K - 1$ for $K$ components |
+| Gamma GLM (log link) | $\log(\mu) = X\beta$, so $\mu = e^{X\beta}$ |
+| Multiplicative effect | $\exp(\hat{\beta}_j)$ for 1-unit increase; $\exp(c \cdot \hat{\beta}_j)$ for $c$-unit |
+| AIC | $-2\log L + 2k$ |
+| BIC | $-2\log L + k \log n$ |
+
+## R Functions Cheat Sheet
+
+| Task | Code |
+|---|---|
+| Regression mixture | `regmixEM(y, x, k = 2, arbvar = FALSE)` |
+| 2D Normal mixture | `mvnormalmixEM(X, k = 3)` |
+| Gamma GLM | `glm(y ~ x, family = Gamma(link = "log"))` |
+| Multiplicative effects | `exp(coef(model))` |
+| LRT for GLM | `anova(reduced, full, test = "LRT")` |
+| Posterior probabilities | `fit$posterior` |
+| Assign to clusters | `ifelse(fit$posterior[,1] > 0.5, 1, 2)` |
+
+## Common Exam Mistakes
+
+1. **Interaction model:** Forgetting to **add** coefficients 2 and 4 to get the second group's line.
+2. **Gamma interpretation:** Saying "a 1-unit increase adds $\exp(\beta)$" — it **multiplies**, not adds.
+3. **Multi-unit effect:** Computing $c \times \exp(\beta)$ instead of $\exp(c \times \beta)$.
+4. **Bivariate mixture parameters:** Using $3K-1$ (univariate formula) instead of $6K-1$.
+5. **Posterior probabilities:** Forgetting that rows sum to 1, so you only need one column to classify.
+6. **arbvar:** Not knowing that `arbvar = FALSE` means shared variance — a simpler, more constrained model.

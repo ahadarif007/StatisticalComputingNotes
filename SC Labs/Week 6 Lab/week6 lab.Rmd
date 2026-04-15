@@ -1,0 +1,962 @@
+---
+title: "Week 6 Lab — Generalised Linear Models (Solutions)"
+author: "Arif"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    latex_engine: xelatex
+    keep_tex: false
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{float}
+  - \usepackage{booktabs}
+  - \usepackage{xcolor}
+  - \usepackage{tcolorbox}
+  - \newtcolorbox{examtip}{colback=blue!5!white, colframe=blue!50!black, title=Exam Tip}
+  - \newtcolorbox{keypoint}{colback=green!5!white, colframe=green!50!black, title=Key Point}
+  - \newtcolorbox{warning}{colback=red!5!white, colframe=red!50!black, title=Common Mistake}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 6, fig.height = 4, fig.pos = "H")
+```
+
+\newpage
+
+# Overview: What This Lab Covers
+
+This lab covers three families of regression models under the **Generalised Linear Models (GLM)** framework:
+
+| Model Type | Response Variable | Link Function | R Family |
+|:-----------|:------------------|:--------------|:---------|
+| Linear Regression | Continuous (e.g. weight, BAL) | Identity: $\mu = X\beta$ | `gaussian` |
+| Logistic Regression | Binary (0/1, Yes/No) | Logit: $\log\frac{p}{1-p} = X\beta$ | `binomial` |
+| Poisson Regression | Counts (0, 1, 2, ...) | Log: $\log(\mu) = X\beta$ | `poisson` |
+
+\begin{examtip}
+\textbf{For the exam, you should know:}
+\begin{enumerate}
+  \item How to fit models with \texttt{lm()} and \texttt{glm()}
+  \item Likelihood Ratio Tests for comparing nested models
+  \item How to compute and interpret Odds Ratios
+  \item What AIC/BIC measure and how to use them for model selection
+  \item What \texttt{offset()} does in Poisson regression
+  \item How to compute MLE manually and verify with \texttt{optim()}
+\end{enumerate}
+\end{examtip}
+
+**Packages used in this lab:**
+
+- **UsingR** — "Using R for Introductory Statistics", Second Edition
+- **HSAUR2** — A Handbook of Statistical Analyses Using R (2nd Edition)
+- **gamair** — Data for 'GAMs: An Introduction with R'
+- **Sleuth3** — Data Sets from Ramsey and Schafer's "Statistical Sleuth (3rd Ed)"
+- **ISLR** — Data for an Introduction to Statistical Learning with Applications in R
+
+```{r install-packages, eval=FALSE}
+# Run this ONCE to install the packages you need (skip if already installed)
+install.packages(c("UsingR", "HSAUR2", "gamair", "Sleuth3", "ISLR", "lmtest", "MASS"))
+```
+
+\newpage
+
+# Linear Models
+
+## Drinking Beer
+
+\begin{keypoint}
+\textbf{Concepts tested:} Simple linear regression with \texttt{lm()}, Likelihood Ratio Test (LRT) for testing a specific parameter value, MLE vs \texttt{lm()} comparison.
+\end{keypoint}
+
+> **Question:** It is well known that the more beer you drink, the more your blood alcohol level rises. We have the following data on 10 students' beer consumption. Enter the data as two vectors, make a scatterplot, and fit a regression line using `lm()`. The response variable is BAL and the predictor is Beers.
+
+| Student | 1    | 2    | 3    | 4    | 5    | 6     | 7    | 8    | 9    | 10   |
+|---------|------|------|------|------|------|-------|------|------|------|------|
+| Beers   | 5    | 2    | 9    | 8    | 3    | 7     | 3    | 5    | 3    | 5    |
+| BAL     | 0.10 | 0.03 | 0.19 | 0.12 | 0.04 | 0.095 | 0.07 | 0.06 | 0.02 | 0.05 |
+
+### Enter the Data and Fit the Model
+
+```{r beer-data}
+# Create the two vectors from the table
+Beers <- c(5, 2, 9, 8, 3, 7, 3, 5, 3, 5)
+BAL   <- c(0.10, 0.03, 0.19, 0.12, 0.04, 0.095, 0.07, 0.06, 0.02, 0.05)
+```
+
+```{r beer-scatter}
+# Plot the data: Beers on x-axis, BAL on y-axis
+plot(Beers, BAL,
+     main = "Blood Alcohol Level vs Beers Consumed",
+     xlab = "Number of Beers",
+     ylab = "Blood Alcohol Level (BAL)",
+     pch  = 19, col = "steelblue", cex = 1.5)
+
+# Fit a simple linear regression: BAL = beta0 + beta1 * Beers + error
+# lm() stands for "linear model"
+# The formula BAL ~ Beers means: BAL is the response, Beers is the predictor
+beer_model <- lm(BAL ~ Beers)
+
+# Add the fitted line to the plot
+abline(beer_model, col = "red", lwd = 2)
+
+# Print the model summary
+summary(beer_model)
+```
+
+**Interpretation:**
+
+- The **slope** (`Beers` coefficient) tells us how much BAL increases, on average, for each additional beer consumed.
+- The **intercept** is the estimated BAL when zero beers are consumed (should be close to 0).
+- The **R-squared** tells us the proportion of variability in BAL explained by Beers.
+- The **p-value** for Beers tells us whether the relationship is statistically significant.
+
+\begin{warning}
+\textbf{Don't confuse R-squared with the coefficient.} R-squared measures how well the model fits overall; the coefficient tells you the \emph{size} of the effect per unit change in the predictor.
+\end{warning}
+
+### Likelihood Ratio Test (LRT)
+
+> **Question:** Test the hypothesis $H_0: \beta_1 = 0.02$ against the one-sided alternative $H_1: \beta_1 < 0.02$ (i.e., that the true slope may not be 0.02). Use a Likelihood Ratio Test.
+
+\begin{keypoint}
+\textbf{What is an LRT?} The Likelihood Ratio Test compares two nested models:
+\begin{itemize}
+  \item $M_0$ (restricted): A simpler model with a fixed/constrained parameter
+  \item $M_1$ (full): A more complex model where that parameter is freely estimated
+\end{itemize}
+The test statistic is $\Lambda = -2 \left[\ell(M_0) - \ell(M_1)\right]$, which follows a $\chi^2$ distribution with degrees of freedom equal to the difference in the number of parameters.
+\end{keypoint}
+
+We define:
+
+- $M_0$: BAL$_i = \beta_0 + 0.02 \cdot \text{Beers}_i + \varepsilon_i$ (slope **fixed** at 0.02)
+- $M_1$: BAL$_i = \beta_0 + \beta_1 \cdot \text{Beers}_i + \varepsilon_i$ (slope **freely estimated**)
+
+```{r beer-lrt}
+# M0: slope is FIXED at 0.02 using offset()
+# offset() adds a known term to the model — it is NOT estimated
+# So lm(BAL ~ 1 + offset(0.02 * Beers)) fits only an intercept,
+# with 0.02*Beers as a known/fixed contribution
+m0 <- lm(BAL ~ 1 + offset(0.02 * Beers))
+
+# M1: slope is freely estimated (standard regression)
+m1 <- lm(BAL ~ Beers)
+
+# Compare via Likelihood Ratio Test
+# anova() with test="LRT" performs the log-likelihood ratio test
+# If p-value < 0.05, we reject M0 (slope is NOT 0.02)
+anova(m0, m1, test = "LRT")
+```
+
+**Interpretation:**
+
+- If the p-value is **small** (< 0.05), we reject $H_0$: the true slope is significantly different from 0.02.
+- If the p-value is **large** ($\geq 0.05$), we cannot reject $H_0$: 0.02 is a plausible value for the slope.
+
+\begin{examtip}
+Remember: \texttt{offset()} in R adds a term with a \textbf{known coefficient} (not estimated). This is how you fix a parameter to a specific value inside \texttt{lm()} or \texttt{glm()}.
+\end{examtip}
+
+### MLE Approach — Verify lm() Results
+
+> **Question:** Compare the coefficients obtained from `lm()` with those from a direct Maximum Likelihood Estimation (MLE) approach. They should agree.
+
+```{r beer-mle}
+# The MLE for a linear regression has closed-form solutions:
+#   beta1_hat = Cov(X,Y) / Var(X)
+#   beta0_hat = mean(Y) - beta1_hat * mean(X)
+#   sigma_hat^2 = (1/n) * sum(residuals^2)  <-- MLE divides by n, NOT n-2
+
+# Manual MLE estimates
+beta1_mle <- cov(Beers, BAL) / var(Beers)  # slope
+beta0_mle <- mean(BAL) - beta1_mle * mean(Beers)  # intercept
+n <- length(BAL)
+sigma2_mle <- sum((BAL - beta0_mle - beta1_mle * Beers)^2) / n  # MLE variance
+
+cat("MLE Intercept:", beta0_mle, "\n")
+cat("MLE Slope:", beta1_mle, "\n")
+cat("MLE sigma^2:", sigma2_mle, "\n\n")
+
+# Compare with lm() coefficients
+cat("lm() Intercept:", coef(beer_model)[1], "\n")
+cat("lm() Slope:", coef(beer_model)[2], "\n")
+# lm() reports sigma^2 with (n-2) denominator (unbiased); MLE uses n
+cat("lm() sigma^2 (unbiased, divides by n-2):", summary(beer_model)$sigma^2, "\n")
+```
+
+\begin{keypoint}
+The coefficient estimates (intercept and slope) from \texttt{lm()} and MLE are \textbf{identical}. The only difference is in the variance estimate:
+\begin{itemize}
+  \item \textbf{MLE:} $\hat{\sigma}^2_{\text{MLE}} = \frac{1}{n}\sum e_i^2$ (biased but maximum likelihood)
+  \item \textbf{lm():} $\hat{\sigma}^2 = \frac{1}{n-p}\sum e_i^2$ (unbiased, where $p$ = number of parameters)
+\end{itemize}
+\end{keypoint}
+
+\newpage
+
+## Hubble Constant
+
+\begin{keypoint}
+\textbf{Concepts tested:} Regression through the origin (no intercept), physical interpretation of regression coefficient, leverage and influential observations.
+\end{keypoint}
+
+> **Question:** The package `gamair` has a dataset called `hubble` which contains distances and velocities of 24 galaxies. The Hubble constant $H_0$ is estimated from Hubble's law: $v = H_0 D$. Can you fit a simple linear regression model to estimate $H_0$? The age of the universe can be estimated as $1/H_0$.
+
+```{r hubble-data}
+# Load the hubble dataset from gamair
+data(hubble, package = "gamair")
+
+# Quick look: 'x' = distance (Mpc), 'y' = velocity (km/s)
+head(hubble)
+str(hubble)
+```
+
+### Fitting the Model (No Intercept)
+
+```{r hubble-model}
+# Fit a linear model WITHOUT intercept (forced through origin)
+# y ~ x - 1  (or equivalently y ~ 0 + x) removes the intercept
+# This is because Hubble's law says v = H0 * D — no intercept term
+hubble_model <- lm(y ~ x - 1, data = hubble)
+
+summary(hubble_model)
+
+# The estimated slope IS the Hubble constant H0
+cat("Estimated Hubble constant H0:", coef(hubble_model), "km/s/Mpc\n")
+```
+
+\begin{examtip}
+To fit a regression through the origin in R, use \texttt{y $\sim$ x - 1} or \texttt{y $\sim$ 0 + x}. This removes the intercept term. Use this when theory dictates the relationship passes through zero.
+\end{examtip}
+
+### Estimating the Age of the Universe
+
+> **Question:** Estimate the age of the universe as $\frac{1}{H_0}$ (with appropriate unit conversions). Should give about 12.8 billion years.
+
+```{r hubble-age}
+# Unit conversions
+Mpc    <- 3.09e19          # 1 Megaparsec in km
+ysec   <- 60^2 * 24 * 365.25  # seconds in a year
+Mpcyear <- Mpc / ysec      # km per Mpc per year
+
+# Age = 1 / H0
+# H0 is in km/s/Mpc. Dividing H0 by Mpcyear converts to units of 1/year.
+# Then 1/that gives us the age in years.
+age_estimate <- 1 / (coef(hubble_model) / Mpcyear)
+cat("Estimated age of the universe:", age_estimate / 1e9, "billion years\n")
+```
+
+**Result:** The estimated age is about **12.8 billion years** (current best estimate is ~13.8 billion years).
+
+### Plot
+
+```{r hubble-plot}
+plot(hubble$x, hubble$y,
+     main = "Hubble's Law: Velocity vs Distance",
+     xlab = "Distance (Mpc)", ylab = "Velocity (km/s)",
+     pch = 19, col = "steelblue")
+abline(hubble_model, col = "red", lwd = 2)
+legend("topleft",
+       legend = paste("H0 =", round(coef(hubble_model), 2), "km/s/Mpc"),
+       col = "red", lwd = 2)
+```
+
+### Leverage Analysis (Section 1.2.1)
+
+> **Question:** An observation is considered to have high leverage if its predictor value is much more extreme compared to the rest. Use `hatvalues()` to find leverage. Remove observations with leverage > 0.08 and refit the zero-intercept model. What is the new estimated age of the universe?
+
+\begin{keypoint}
+\textbf{Leverage} measures how unusual an observation's predictor value is. High-leverage points have a disproportionate influence on the fitted line. Use \texttt{hatvalues(model)} to compute leverage for each observation.
+\end{keypoint}
+
+```{r hubble-leverage}
+# hatvalues() returns the leverage of each observation
+h <- hatvalues(hubble_model)
+cat("Leverage values:\n")
+print(round(h, 4))
+
+# Identify observations with leverage > 0.08
+high_lev <- which(h > 0.08)
+cat("\nObservations with leverage > 0.08:", high_lev, "\n")
+cat("These galaxies have extreme distances compared to the rest.\n")
+```
+
+### Refitting Without High-Leverage Observations
+
+```{r hubble-refit}
+# Remove and refit
+hubble_clean <- hubble[-high_lev, ]
+hubble_model2 <- lm(y ~ x - 1, data = hubble_clean)
+summary(hubble_model2)
+
+# New H0 and age
+cat("New H0 estimate:", coef(hubble_model2), "km/s/Mpc\n")
+age_estimate2 <- 1 / (coef(hubble_model2) / Mpcyear)
+cat("New age of universe:", age_estimate2 / 1e9, "billion years\n")
+```
+
+**Interpretation:** After removing the high-leverage galaxies, $H_0$ changes slightly, and the estimated age of the universe adjusts accordingly.
+
+\newpage
+
+## Baby Birthweight
+
+\begin{keypoint}
+\textbf{Concepts tested:} Multiple regression, handling missing data (coded values like 999, 99), \texttt{step()} for stepwise model selection, model comparison via LRT and ANOVA.
+\end{keypoint}
+
+> **Question:** The library `UsingR` has a dataset called `babies`. Use the predictors `gestation`, `age`, `ht`, `wt1`, and `smoke` to model birthweight (`wt`). Handle missing values coded as 0 or 999 appropriately. Use `step()` for automatic variable selection.
+
+```{r babies-data}
+library(UsingR)
+data(babies)
+
+# Explore the dataset
+head(babies)
+str(babies)
+```
+
+### Data Cleaning
+
+```{r babies-clean}
+# The babies dataset uses special codes for missing values:
+#   gestation = 999 means unknown
+#   ht = 99 means unknown
+#   wt1 = 999 means unknown
+#   smoke = 9 means unknown
+babies_clean <- babies
+
+# Replace coded missing values with NA
+babies_clean$gestation[babies_clean$gestation == 999] <- NA
+babies_clean$ht[babies_clean$ht == 99] <- NA
+babies_clean$wt1[babies_clean$wt1 == 999] <- NA
+babies_clean$smoke[babies_clean$smoke == 9] <- NA
+
+# Keep only the columns we need and remove rows with NAs
+babies_clean <- na.omit(babies_clean[, c("wt", "gestation", "age", "ht", "wt1", "smoke")])
+
+cat("Clean dataset has", nrow(babies_clean), "observations\n")
+summary(babies_clean)
+```
+
+### Fitting the Full Model
+
+```{r babies-full-model}
+# Full model: birthweight ~ all five predictors
+model_full <- lm(wt ~ gestation + age + ht + wt1 + smoke, data = babies_clean)
+summary(model_full)
+```
+
+### Stepwise Variable Selection with step()
+
+```{r babies-step}
+# step() performs automatic variable selection using AIC
+# It tries removing/adding predictors one at a time
+# and keeps the model with the lowest AIC
+model_step <- step(model_full, direction = "both", trace = 1)
+
+# Final selected model
+cat("\n=== Final Model Selected by step() ===\n")
+summary(model_step)
+```
+
+\begin{examtip}
+\texttt{step()} performs AIC-based stepwise selection. It starts from the full model and removes variables one at a time if doing so \textbf{lowers the AIC}. A lower AIC means a better trade-off between fit and complexity.
+
+\textbf{AIC} = $-2\ell + 2k$ where $\ell$ = log-likelihood, $k$ = number of parameters.
+\end{examtip}
+
+### Model Comparison with ANOVA and LRT
+
+```{r babies-compare}
+# Compare nested models: simple (gestation only) vs full
+model_simple <- lm(wt ~ gestation, data = babies_clean)
+
+# ANOVA F-test: tests whether the extra variables significantly improve the fit
+anova(model_simple, model_full)
+
+# Likelihood Ratio Test
+anova(model_simple, model_full, test = "LRT")
+```
+
+```{r babies-lrt-package}
+# Alternative: lrtest() from lmtest package
+library(lmtest)
+lrtest(model_simple, model_full)
+```
+
+**Interpretation:**
+
+- If the p-value is small, the additional predictors (`age`, `ht`, `wt1`, `smoke`) collectively provide significant explanatory power beyond `gestation` alone.
+- If the p-value is large, the simpler model (just `gestation`) is sufficient.
+
+\newpage
+
+# Logistic Regression
+
+\begin{keypoint}
+\textbf{Key formula — the logistic regression model:}
+$$\log\left(\frac{p_i}{1-p_i}\right) = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \ldots$$
+where $p_i = P(Y_i = 1 | X_i)$. The left side is the \textbf{log-odds} (logit). Each coefficient represents the change in log-odds for a one-unit change in the predictor. Exponentiated coefficients give \textbf{odds ratios}.
+\end{keypoint}
+
+## Keeping Birds (Case-Control Study)
+
+> **Question:** Using the `case2002` dataset from `Sleuth3`, build a logistic regression model for lung cancer (`LC`) using `BK` (bird keeping), `YR` (years smoking), and `CD` (cigarettes per day). Pay close attention to how R encodes the categorical variables. Check `levels(case2002$LC)` and `levels(case2002$BK)` to confirm which level is 0 and which is 1.
+
+```{r birds-data}
+library(Sleuth3)
+data(case2002)
+
+head(case2002)
+str(case2002)
+```
+
+### Understanding Factor Levels
+
+```{r birds-levels}
+# CRITICAL: R encodes the FIRST level (alphabetically) as 0 (reference)
+cat("Levels of LC (Lung Cancer):", levels(case2002$LC), "\n")
+# "LungCancer" before "NoCancer" alphabetically
+# => "LungCancer" = 0 (reference), "NoCancer" = 1
+# => The model predicts P(NoCancer) by default!
+
+cat("Levels of BK (Bird Keeping):", levels(case2002$BK), "\n")
+# "Bird" before "NoBird" alphabetically
+# => "Bird" = 0 (reference), "NoBird" = 1
+```
+
+\begin{warning}
+R assigns factor levels alphabetically. ``LungCancer'' comes before ``NoCancer'', so R models $P(\text{NoCancer})$. This means \textbf{positive coefficients increase the probability of NO cancer}. Be very careful with interpretation!
+\end{warning}
+
+### Fitting Logistic Regression
+
+> **Question:** Fit a logistic regression using `glm(..., family = binomial)` and summarise the output. Which predictors are statistically significant?
+
+```{r birds-glm}
+# family = binomial => logistic regression (logit link)
+birds_model <- glm(LC ~ BK + YR + CD, family = binomial, data = case2002)
+summary(birds_model)
+```
+
+**Reading the `glm()` summary:**
+
+- **Estimate** = estimated coefficient ($\hat{\beta}$) on the log-odds scale
+- **Std. Error** = standard error of $\hat{\beta}$
+- **z value** = Wald test statistic ($\hat{\beta} / \text{SE}$)
+- **Pr(>|z|)** = p-value; small values indicate significance
+
+### Manual MLE with optim()
+
+> **Question:** Compare the coefficients from `glm()` with those obtained by maximising the Bernoulli log-likelihood directly using `optim()`. Write the log-likelihood yourself and check they match.
+
+```{r birds-mle}
+# The Bernoulli log-likelihood for logistic regression:
+# l(beta) = sum( y_i * log(p_i) + (1 - y_i) * log(1 - p_i) )
+# where p_i = 1 / (1 + exp(-X_i' beta))  [the logistic/sigmoid function]
+
+# Prepare data
+y <- as.numeric(case2002$LC) - 1  # Convert factor to 0/1
+# as.numeric() on a factor gives 1 for first level, 2 for second
+# Subtracting 1 gives 0 and 1
+
+# Build the design matrix (intercept + predictors)
+X <- model.matrix(~ BK + YR + CD, data = case2002)
+
+# Define negative log-likelihood (we MINIMISE, so negate)
+neg_log_lik <- function(beta, X, y) {
+  eta <- X %*% beta            # linear predictor
+  p <- 1 / (1 + exp(-eta))     # logistic function
+  # Add tiny epsilon to avoid log(0)
+  ll <- sum(y * log(p + 1e-10) + (1 - y) * log(1 - p + 1e-10))
+  return(-ll)  # negative because optim() minimises
+}
+
+# Optimise using BFGS (a quasi-Newton method)
+init_beta <- rep(0, ncol(X))
+mle_result <- optim(init_beta, neg_log_lik, X = X, y = y, method = "BFGS")
+
+# Compare
+cat("MLE coefficients (optim):\n")
+print(round(mle_result$par, 5))
+cat("\nglm() coefficients:\n")
+print(round(coef(birds_model), 5))
+# They should match (or be very close)!
+```
+
+\begin{examtip}
+\textbf{Steps for manual MLE:}
+\begin{enumerate}
+  \item Convert factor response to 0/1 using \texttt{as.numeric(factor) - 1}
+  \item Build design matrix with \texttt{model.matrix($\sim$ predictors)}
+  \item Write the negative log-likelihood function
+  \item Use \texttt{optim()} with method \texttt{"BFGS"} to minimise
+  \item Compare with \texttt{glm()} — coefficients should be identical
+\end{enumerate}
+\end{examtip}
+
+### Odds Ratios
+
+> **Question:**
+>
+> 1. What is the odds-ratio for somebody that keeps birds?
+> 2. What is the odds-ratio for an extra year of smoking?
+> 3. What is the odds-ratio for an extra 10 years of smoking?
+>
+> *Hint:* Odds ratios come from exponentiating the model coefficients — `exp(coef(model))`. For question 3, think about what multiplying the coefficient by 10 does before exponentiating.
+
+```{r birds-or}
+# Odds ratios = exp(coefficients)
+odds_ratios <- exp(coef(birds_model))
+cat("Odds Ratios:\n")
+print(odds_ratios)
+
+# IMPORTANT: the BK coefficient is for "NoBird" (the second level)
+# So exp(coef) gives OR for NoBird vs Bird
+# The OR for KEEPING birds = 1 / exp(coef for BKNoBird)
+cat("\n--- Bird Keeping ---\n")
+cat("The coefficient shown is for BKNoBird (no bird vs bird keeping)\n")
+cat("OR for NoBird vs Bird:", odds_ratios["BKNoBird"], "\n")
+cat("OR for KEEPING birds (Bird vs NoBird) = 1/above:", 
+    1/odds_ratios["BKNoBird"], "\n\n")
+
+# OR for 1 extra year of smoking
+cat("--- Smoking (per year) ---\n")
+cat("OR for 1 extra year of smoking:", odds_ratios["YR"], "\n")
+# Each additional year of smoking multiplies the odds by this factor
+
+# OR for 10 extra years of smoking
+# For k years: OR = exp(k * beta_YR) = [exp(beta_YR)]^k
+or_10yr <- exp(10 * coef(birds_model)["YR"])
+cat("\n--- Smoking (10 years) ---\n")
+cat("OR for 10 extra years of smoking:", or_10yr, "\n")
+```
+
+\begin{keypoint}
+\textbf{Odds Ratio interpretation:}
+\begin{itemize}
+  \item OR = 1: No effect
+  \item OR $>$ 1: Increased odds (risk factor)
+  \item OR $<$ 1: Decreased odds (protective factor)
+  \item For $k$ units: $\text{OR}_k = \exp(k \cdot \hat{\beta}) = [\exp(\hat{\beta})]^k$
+\end{itemize}
+\end{keypoint}
+
+\begin{warning}
+An OR of 4 does \textbf{NOT} mean you are ``4 times more likely''. It means your \textbf{odds} are 4 times higher. Example: if baseline probability is 50\% (odds = 1:1), an OR of 4 gives odds 4:1, so probability = 4/5 = 80\% — not 200\%.
+\end{warning}
+
+### Building Intuition: How ORs Modify Absolute Risk (Section 2.1.1)
+
+```{r or-intuition}
+# This function shows how an odds ratio changes absolute probability
+change_in_prob <- function(orig_prob, OR) {
+  orig_odds <- orig_prob / (1 - orig_prob)  # convert prob to odds
+  new_odds  <- orig_odds * OR                # apply OR
+  new_prob  <- new_odds / (1 + new_odds)     # convert back to prob
+  return(new_prob - orig_prob)               # absolute change
+}
+
+# Examples at 1% baseline
+cat("Change in P (1% baseline, OR=1.08):", change_in_prob(0.01, 1.08), "\n")
+cat("Change in P (1% baseline, OR=2.00):", change_in_prob(0.01, 2.00), "\n")
+cat("Change in P (1% baseline, OR=3.00):", change_in_prob(0.01, 3.00), "\n")
+
+# Plot: absolute change vs OR at different baselines
+OR_vals <- seq(1, 5, by = 0.1)
+baselines <- c(0.01, 0.05, 0.10, 0.25, 0.50)
+colors <- c("blue", "red", "green4", "purple", "orange")
+
+plot(NULL, xlim = c(1, 5), ylim = c(0, 0.35),
+     main = "Absolute Change in Probability vs Odds Ratio",
+     xlab = "Odds Ratio", ylab = "Absolute Change in Probability")
+for (i in seq_along(baselines)) {
+  changes <- sapply(OR_vals, function(or) change_in_prob(baselines[i], or))
+  lines(OR_vals, changes, col = colors[i], lwd = 2)
+}
+legend("topleft", legend = paste("Baseline =", baselines),
+       col = colors, lwd = 2, cex = 0.8)
+```
+
+**Key insight:** The same odds ratio produces very different absolute risk changes depending on the baseline probability. At low baselines (1%), even large ORs produce small absolute changes.
+
+### Best Model — Likelihood Ratio Test (Section 2.1.2)
+
+> **Question:** Use Likelihood Ratio Tests, AIC, and BIC to determine the best model. Try dropping predictors with high p-values.
+
+```{r birds-best-model}
+# Full model
+cat("=== Full Model (BK + YR + CD) ===\n")
+summary(birds_model)
+
+# Reduced model: drop CD if it has a high p-value
+birds_reduced <- glm(LC ~ BK + YR, family = binomial, data = case2002)
+cat("\n=== Reduced Model (BK + YR) ===\n")
+summary(birds_reduced)
+
+# LRT: compare nested models
+cat("\n=== Likelihood Ratio Test ===\n")
+anova(birds_reduced, birds_model, test = "LRT")
+
+# AIC and BIC comparison
+cat("\n=== Information Criteria ===\n")
+cat("Full model   - AIC:", AIC(birds_model),  " BIC:", BIC(birds_model), "\n")
+cat("Reduced model - AIC:", AIC(birds_reduced), " BIC:", BIC(birds_reduced), "\n")
+```
+
+\begin{examtip}
+\textbf{Model selection summary:}
+\begin{itemize}
+  \item \textbf{LRT:} Tests whether adding a parameter significantly improves the fit ($\chi^2$ test)
+  \item \textbf{AIC} = $-2\ell + 2k$: Penalises \# parameters lightly. Lower = better.
+  \item \textbf{BIC} = $-2\ell + k\log(n)$: Penalises \# parameters more heavily. Lower = better.
+  \item If LRT is not significant \textbf{AND} AIC/BIC favour the simpler model $\Rightarrow$ drop the variable.
+\end{itemize}
+\end{examtip}
+
+\newpage
+
+## Predicting Diabetes (Pima Indian Dataset)
+
+> **Question:** Using the `Pima.tr` dataset from the `MASS` package:
+>
+> 1. Explore the dataset. How many observations? Any missing values?
+> 2. Build a logistic regression predicting diabetes (`type`) from number of pregnancies (`npreg`).
+> 3. Extend the model by adding glucose concentration (`glu`).
+> 4. Compare the models using a likelihood ratio test.
+> 5. Interpret the coefficients and their significance. Compute and interpret the odds ratios for both predictors.
+> 6. Based on the odds ratios, discuss the effect of `npreg` and `glu` on the likelihood of having diabetes.
+
+### Step 1: Load and Explore
+
+```{r pima-explore}
+data("Pima.tr", package = "MASS")
+
+head(Pima.tr)
+summary(Pima.tr)
+str(Pima.tr)
+
+cat("Number of NAs per column:\n")
+colSums(is.na(Pima.tr))
+# 'type' is the response: "Yes" (diabetic) or "No" (not diabetic)
+```
+
+### Step 2: Simple Model (npreg only)
+
+```{r pima-model1}
+pima_model1 <- glm(type ~ npreg, family = binomial, data = Pima.tr)
+summary(pima_model1)
+```
+
+### Step 3: Extended Model (npreg + glu)
+
+```{r pima-model2}
+pima_model2 <- glm(type ~ npreg + glu, family = binomial, data = Pima.tr)
+summary(pima_model2)
+```
+
+### Step 4: Likelihood Ratio Test
+
+```{r pima-lrt}
+# Model 1 is nested IN Model 2 (Model 2 has everything Model 1 has, plus glu)
+anova(pima_model1, pima_model2, test = "LRT")
+# If p-value is very small => adding glu significantly improves the model
+```
+
+### Step 5: Interpret Coefficients and Odds Ratios
+
+```{r pima-interpret}
+# Coefficients (log-odds scale)
+cat("=== Coefficients (log-odds scale) ===\n")
+print(coef(pima_model2))
+
+# Odds ratios: exponentiate
+cat("\n=== Odds Ratios ===\n")
+or_pima <- exp(coef(pima_model2))
+print(or_pima)
+
+# 95% Confidence Intervals for Odds Ratios
+cat("\n=== 95% CI for Odds Ratios ===\n")
+print(exp(confint(pima_model2)))
+```
+
+### Step 6: Discussion
+
+```{r pima-discuss}
+# npreg interpretation
+cat("OR for npreg:", or_pima["npreg"], "\n")
+cat("=> Each additional pregnancy multiplies the odds of diabetes by",
+    round(or_pima["npreg"], 3), "\n")
+cat("=> That's a", round((or_pima["npreg"] - 1) * 100, 1),
+    "% increase in odds per pregnancy\n\n")
+
+# glu interpretation
+cat("OR for glu:", or_pima["glu"], "\n")
+cat("=> Each 1 mg/dL increase in glucose multiplies the odds by",
+    round(or_pima["glu"], 4), "\n")
+cat("=> For a 10 mg/dL increase: OR =", round(or_pima["glu"]^10, 3), "\n")
+```
+
+\newpage
+
+## Predicting Default (Credit Data)
+
+> **Question:** Using the `Default` dataset from the `ISLR` package:
+>
+> 1. Load the dataset using `data("Default", package = "ISLR")`.
+> 2. Build a logistic regression model predicting `default` using `balance` (credit card balance).
+> 3. Extend the model by including `income` as an additional predictor.
+> 4. Compare the models using Akaike Information Criterion (AIC). Which model fits better?
+> 5. Compute and interpret the odds ratios for `balance` and `income`. What does a unit increase in each variable imply about the probability of default?
+> 6. Do you get similar parameters using MLE?
+
+### Step 1: Load the Dataset
+
+```{r default-load}
+data("Default", package = "ISLR")
+head(Default)
+str(Default)
+summary(Default)
+```
+
+### Step 2: Simple Model (balance only)
+
+```{r default-model1}
+default_model1 <- glm(default ~ balance, family = binomial, data = Default)
+summary(default_model1)
+```
+
+### Step 3: Extended Model (balance + income)
+
+```{r default-model2}
+default_model2 <- glm(default ~ balance + income, family = binomial, data = Default)
+summary(default_model2)
+```
+
+### Step 4: Compare Models Using AIC
+
+```{r default-aic}
+cat("Model 1 (balance only)    AIC:", AIC(default_model1), "\n")
+cat("Model 2 (balance + income) AIC:", AIC(default_model2), "\n")
+
+if (AIC(default_model2) < AIC(default_model1)) {
+  cat("\nModel 2 has lower AIC => adding income marginally improves fit\n")
+} else {
+  cat("\nModel 1 has lower AIC => adding income doesn't help\n")
+}
+```
+
+### Step 5: Odds Ratios
+
+```{r default-or}
+or_default <- exp(coef(default_model2))
+cat("Odds Ratios:\n")
+print(or_default)
+
+cat("\nOR for balance:", or_default["balance"], "\n")
+cat("=> Each $1 increase in balance multiplies odds of default by",
+    round(or_default["balance"], 6), "\n")
+cat("=> For a $100 increase: OR =", round(or_default["balance"]^100, 4), "\n")
+
+cat("\nOR for income:", or_default["income"], "\n")
+cat("=> Each $1 increase in income multiplies odds of default by",
+    round(or_default["income"], 8), "\n")
+cat("=> Income effect is very small per dollar\n")
+```
+
+### Step 6: MLE Comparison
+
+```{r default-mle}
+# Verify glm() results with manual MLE
+y_default <- as.numeric(Default$default) - 1  # Convert Yes/No to 0/1
+X_default <- model.matrix(~ balance + income, data = Default)
+
+# Negative log-likelihood with numerical stability
+neg_ll_default <- function(beta, X, y) {
+  eta <- X %*% beta
+  # log-sum-exp trick: avoid overflow for large eta
+  ll <- sum(y * eta - log(1 + exp(pmin(eta, 500))))
+  return(-ll)
+}
+
+# Optimise
+init <- rep(0, ncol(X_default))
+mle_default <- optim(init, neg_ll_default, X = X_default, y = y_default,
+                     method = "BFGS", control = list(maxit = 1000))
+
+cat("MLE coefficients (optim):\n")
+print(mle_default$par)
+cat("\nglm() coefficients:\n")
+print(coef(default_model2))
+# They should be very close
+```
+
+\newpage
+
+# Poisson Regression — Insurance Claims Example
+
+\begin{keypoint}
+\textbf{Poisson regression} is used when the response is a \textbf{count} (non-negative integers).
+
+Key formulas:
+\begin{itemize}
+  \item Model: $Y_i \sim \text{Poisson}(\mu_i)$, with $\log(\mu_i) = X_i'\beta$
+  \item Log-likelihood: $\ell(\beta) = \sum\left[y_i X_i'\beta - \exp(X_i'\beta) - \log(y_i!)\right]$
+  \item With offset: $\log(\mu_i / E_i) = X_i'\beta \Longleftrightarrow \log(\mu_i) = X_i'\beta + \log(E_i)$
+\end{itemize}
+where $E_i$ is the ``exposure'' (e.g. number of policyholders).
+\end{keypoint}
+
+> **Question:** Using the `Insurance` dataset from `MASS`, fit a Poisson regression model for `Claims` using `District`, `Group`, `Age`, and an offset for `log(Holders)`.
+
+```{r insurance-data}
+library(MASS)
+data(Insurance)
+
+head(Insurance)
+str(Insurance)
+# Claims = number of claims (count), Holders = number of policyholders
+# District, Group, Age = categorical predictors
+```
+
+### Fitting the Poisson Model
+
+```{r insurance-model}
+# offset(log(Holders)) accounts for "exposure" — the number of policyholders
+# Without it, we'd model total claims; with it, we model the RATE per holder
+poisson_model <- glm(Claims ~ District + Group + Age + offset(log(Holders)),
+                     family = poisson, data = Insurance)
+summary(poisson_model)
+```
+
+## Categorical Variables: Orthogonal Polynomials vs Dummy Variables (Section 3.1)
+
+> **Question:** R uses orthogonal polynomials by default for ordered factors. Convert `Age` and `Group` to standard dummy (treatment) coding. Rebuild the model. Is there any difference in AIC scores?
+
+```{r insurance-contrasts}
+cat("=== Default Model (Orthogonal Polynomials) ===\n")
+cat("AIC:", AIC(poisson_model), "\n\n")
+
+# Convert to regular factors with treatment contrasts (standard dummy coding)
+Insurance2 <- Insurance
+Insurance2$Age <- factor(Insurance2$Age)
+Insurance2$Group <- factor(Insurance2$Group)
+
+# Set treatment contrasts (0/1 dummy coding)
+contrasts(Insurance2$Age) <- contr.treatment(levels(Insurance2$Age))
+contrasts(Insurance2$Group) <- contr.treatment(levels(Insurance2$Group))
+
+# Refit
+poisson_model_dummy <- glm(Claims ~ District + Group + Age + offset(log(Holders)),
+                           family = poisson, data = Insurance2)
+
+cat("=== Dummy Variable Model (Treatment Contrasts) ===\n")
+summary(poisson_model_dummy)
+cat("\nAIC:", AIC(poisson_model_dummy), "\n")
+
+# Compare
+cat("\n=== Comparison ===\n")
+cat("Orthogonal Polynomials AIC:", AIC(poisson_model), "\n")
+cat("Treatment (Dummy)      AIC:", AIC(poisson_model_dummy), "\n")
+cat("Difference:", AIC(poisson_model) - AIC(poisson_model_dummy), "\n")
+```
+
+\begin{keypoint}
+\textbf{The AIC is the same} — the model fit is identical regardless of coding scheme. Only the \textbf{interpretation} of coefficients differs:
+\begin{itemize}
+  \item \textbf{Orthogonal Polynomials (default for ordered factors):} Show linear, quadratic, cubic trends. E.g. ``as age increases, claims decrease.''
+  \item \textbf{Treatment/Dummy coding:} Compare each level to a baseline. E.g. ``age 25–29 has X more claims than age $<$25.''
+\end{itemize}
+For prediction, either works. For interpretation, choose the coding that matches your research question.
+\end{keypoint}
+
+## Why Use an Offset? (Section 3.2)
+
+> **Question:** Build a model without the offset term. Compare the two models on AIC, BIC, and Residual Deviance. Which model should we go with?
+
+\begin{keypoint}
+The offset \texttt{log(Holders)} transforms the model from predicting \textbf{total counts} to predicting \textbf{rates}:
+$$\log(\mu_i) = X_i'\beta + \log(\text{Holders}_i) \iff \log\left(\frac{\mu_i}{\text{Holders}_i}\right) = X_i'\beta$$
+\end{keypoint}
+
+```{r insurance-offset}
+# Model WITH offset = rate model
+model_with_offset <- poisson_model
+
+# Model WITHOUT offset = count model
+model_no_offset <- glm(Claims ~ District + Group + Age,
+                       family = poisson, data = Insurance)
+
+cat("=== Model WITH Offset (Rate Model) ===\n")
+cat("AIC:", AIC(model_with_offset), "\n")
+cat("BIC:", BIC(model_with_offset), "\n")
+cat("Residual Deviance:", deviance(model_with_offset), "\n")
+cat("Degrees of Freedom:", df.residual(model_with_offset), "\n\n")
+
+cat("=== Model WITHOUT Offset (Count Model) ===\n")
+cat("AIC:", AIC(model_no_offset), "\n")
+cat("BIC:", BIC(model_no_offset), "\n")
+cat("Residual Deviance:", deviance(model_no_offset), "\n")
+cat("Degrees of Freedom:", df.residual(model_no_offset), "\n\n")
+
+cat("=== Which is Better? ===\n")
+cat("AIC difference (with - without):", AIC(model_with_offset) - AIC(model_no_offset), "\n")
+cat("BIC difference (with - without):", BIC(model_with_offset) - BIC(model_no_offset), "\n")
+```
+
+**Conclusion:**
+
+- **Without offset:** The model predicts *total claims* without knowing how many policyholders exist. A group with 500 holders will naturally have more claims than one with 50 — the model can't account for this.
+- **With offset:** We model the **rate** of claims per holder ($\mu_i / \text{Holders}_i$). This is what we actually care about — is one group *riskier per person*?
+- **The offset model should have much lower AIC/BIC**, because it correctly accounts for exposure (group size).
+
+```{r insurance-summary}
+cat("\nConclusion: The model WITH offset is strongly preferred.\n")
+cat("It correctly models the claim RATE per holder, not just raw counts.\n")
+```
+
+\newpage
+
+# Exam Quick Reference
+
+\begin{tcolorbox}[colback=yellow!10!white, colframe=orange!80!black, title=Key R Functions to Remember]
+\begin{tabular}{ll}
+\texttt{lm(y $\sim$ x)} & Simple/multiple linear regression \\
+\texttt{lm(y $\sim$ x - 1)} & Regression through the origin \\
+\texttt{glm(y $\sim$ x, family=binomial)} & Logistic regression \\
+\texttt{glm(y $\sim$ x, family=poisson)} & Poisson regression \\
+\texttt{offset()} & Fixed known term (not estimated) \\
+\texttt{anova(m1, m2, test="LRT")} & Likelihood Ratio Test \\
+\texttt{AIC(model)}, \texttt{BIC(model)} & Information criteria \\
+\texttt{exp(coef(model))} & Odds ratios (logistic) \\
+\texttt{hatvalues(model)} & Leverage values \\
+\texttt{step(model)} & Stepwise model selection via AIC \\
+\texttt{optim(init, fn, method="BFGS")} & Numerical optimisation for MLE \\
+\texttt{model.matrix($\sim$ x)} & Build design matrix \\
+\texttt{levels(factor)} & Check factor level ordering \\
+\texttt{confint(model)} & Confidence intervals \\
+\end{tabular}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=yellow!10!white, colframe=orange!80!black, title=Key Formulas]
+\textbf{Linear Regression MLE:}
+$$\hat{\beta}_1 = \frac{\text{Cov}(X,Y)}{\text{Var}(X)}, \quad \hat{\beta}_0 = \bar{Y} - \hat{\beta}_1\bar{X}, \quad \hat{\sigma}^2_{\text{MLE}} = \frac{1}{n}\sum e_i^2$$
+
+\textbf{Logistic Regression:}
+$$\log\left(\frac{p}{1-p}\right) = X\beta, \quad p = \frac{1}{1+e^{-X\beta}}, \quad \text{OR} = e^{\hat{\beta}}$$
+
+\textbf{Poisson Regression:}
+$$\log(\mu) = X\beta, \quad \mu = e^{X\beta}$$
+
+\textbf{LRT Statistic:}
+$$\Lambda = -2[\ell(M_0) - \ell(M_1)] \sim \chi^2_{\Delta p}$$
+
+\textbf{Information Criteria:}
+$$\text{AIC} = -2\ell + 2k, \quad \text{BIC} = -2\ell + k\log(n)$$
+\end{tcolorbox}

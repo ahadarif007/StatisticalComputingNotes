@@ -1,0 +1,748 @@
+---
+title: "Week 7 Lab — Generalised Linear Models + Density Estimation (Solutions)"
+author: "Arif"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    latex_engine: xelatex
+    keep_tex: false
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{float}
+  - \usepackage{booktabs}
+  - \usepackage{xcolor}
+  - \usepackage{tcolorbox}
+  - \newtcolorbox{examtip}{colback=blue!5!white, colframe=blue!50!black, title=Exam Tip}
+  - \newtcolorbox{keypoint}{colback=green!5!white, colframe=green!50!black, title=Key Point}
+  - \newtcolorbox{warning}{colback=red!5!white, colframe=red!50!black, title=Common Mistake}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 6, fig.height = 4, fig.pos = "H")
+```
+
+\newpage
+
+# Overview: What This Lab Covers
+
+This lab extends GLMs beyond logistic regression to **Poisson**, **Negative Binomial**, and **Gamma** regression, plus introduces **Density Estimation**.
+
+| Model | Response | Key Property | R Code |
+|:------|:---------|:-------------|:-------|
+| Poisson | Counts | Mean = Variance | `family = poisson` |
+| Negative Binomial | Counts | Variance > Mean (overdispersion) | `glm.nb()` |
+| Gamma | Continuous positive | Variance $\propto$ Mean$^2$ | `family = Gamma(link="log")` |
+
+\begin{examtip}
+\textbf{For the exam, you should know:}
+\begin{enumerate}
+  \item When to use Poisson vs Negative Binomial vs Gamma regression
+  \item How to detect overdispersion (Residual Deviance $\gg$ df)
+  \item The role of \texttt{offset()} in rate modelling
+  \item How to perform manual MLE with \texttt{optim()} for Poisson regression
+  \item Model comparison using AIC, BIC, and residual deviance
+  \item Kernel density estimation: kernels, bandwidth selection, and interpretation
+\end{enumerate}
+\end{examtip}
+
+```{r install-packages, eval=FALSE}
+# Run ONCE to install required packages
+install.packages(c("MASS", "gamair", "lmtest"))
+```
+
+```{r load-libraries}
+library(MASS)
+```
+
+\newpage
+
+# Motor Insurance Claims
+
+> **Question:** Using the Motor Insurance Claims dataset from the `MASS` package (which contains `Holders`, `Claims`, `District`, `Group`, `Age`), fit Poisson, Negative Binomial, and Gamma regression models. Compare them using AIC, BIC, and residual deviance.
+
+```{r insurance-data}
+library(MASS)
+data(Insurance)
+head(Insurance)
+str(Insurance)
+```
+
+\begin{keypoint}
+The dataset includes:
+\begin{itemize}
+  \item \texttt{Holders}: Number of policyholders (exposure variable)
+  \item \texttt{Claims}: Number of claims made (count response)
+  \item \texttt{District}, \texttt{Group}, \texttt{Age}: Categorical predictors
+\end{itemize}
+\end{keypoint}
+
+## Poisson Regression
+
+> **Question:** Fit a Poisson regression model: `Claims ~ District + Group + Age` with `offset = log(Holders)`. The Poisson model assumes the variance equals the mean.
+
+\begin{keypoint}
+\textbf{Poisson Regression:}
+$$Y_i \sim \text{Poisson}(\mu_i), \quad \log(\mu_i) = X_i'\beta + \log(\text{Holders}_i)$$
+The offset converts the model from predicting \textbf{total counts} to predicting \textbf{rates} (claims per holder).
+\end{keypoint}
+
+```{r poisson-model}
+# Poisson regression with log-offset for exposure
+# family = poisson uses log link by default
+poisson_model <- glm(Claims ~ District + Group + Age,
+                     family = poisson(link = "log"),
+                     offset = log(Holders),
+                     data = Insurance)
+summary(poisson_model)
+```
+
+**Checking for overdispersion:**
+
+```{r poisson-overdispersion}
+# Overdispersion: Residual Deviance >> degrees of freedom
+# The ratio should be close to 1 for a good Poisson fit
+cat("Residual Deviance:", deviance(poisson_model), "\n")
+cat("Degrees of Freedom:", df.residual(poisson_model), "\n")
+cat("Ratio (Deviance/df):", deviance(poisson_model) / df.residual(poisson_model), "\n")
+```
+
+\begin{examtip}
+\textbf{How to detect overdispersion:}
+$$\text{Dispersion ratio} = \frac{\text{Residual Deviance}}{\text{df}} \approx 1 \text{ (good Poisson fit)}$$
+If ratio $\gg 1$, there is \textbf{overdispersion} --- the variance is larger than the mean. Consider using Negative Binomial instead.
+\end{examtip}
+
+## Negative Binomial Regression
+
+> **Question:** If overdispersion is detected in the Poisson model, fit a Negative Binomial regression model using `glm.nb()`. This model introduces an extra parameter to model the variance. Compare log-likelihood and deviance with the Poisson model.
+
+\begin{keypoint}
+\textbf{Negative Binomial:} $\text{Var}(Y_i) = \mu_i + \mu_i^2 / \theta$, where $\theta$ is the dispersion parameter. When $\theta \to \infty$, the NB reduces to Poisson.
+
+Use \texttt{glm.nb()} from the \texttt{MASS} package (not \texttt{glm()} --- it needs special handling for the $\theta$ parameter).
+\end{keypoint}
+
+```{r nb-model}
+# Negative Binomial regression using glm.nb() from MASS
+# glm.nb() automatically estimates the dispersion parameter theta
+nb_model <- glm.nb(Claims ~ District + Group + Age + offset(log(Holders)),
+                   data = Insurance)
+summary(nb_model)
+
+cat("\nEstimated theta (dispersion):", nb_model$theta, "\n")
+cat("Theta SE:", nb_model$SE.theta, "\n")
+```
+
+**Comparison with Poisson:**
+
+```{r poisson-vs-nb}
+cat("=== Poisson vs Negative Binomial ===\n")
+cat("Poisson log-likelihood:", logLik(poisson_model), "\n")
+cat("NB log-likelihood:     ", logLik(nb_model), "\n\n")
+cat("Poisson deviance:", deviance(poisson_model), "\n")
+cat("NB deviance:     ", deviance(nb_model), "\n\n")
+cat("Poisson AIC:", AIC(poisson_model), "\n")
+cat("NB AIC:     ", AIC(nb_model), "\n")
+```
+
+\begin{warning}
+You cannot use \texttt{anova()} to directly compare Poisson and NB models because they are not nested in the usual sense (NB has an extra dispersion parameter estimated outside the GLM framework). Use AIC/BIC instead.
+\end{warning}
+
+## Gamma Regression
+
+> **Question:** Gamma regression is useful for modelling continuous positive data where the variance increases with the mean. Model insurance claim costs. Note: for Gamma regression we might model `AvgClaimSize` using `Holders` as weights.
+
+\begin{keypoint}
+\textbf{Gamma distribution:} Used for continuous, positive data where variance $\propto$ mean$^2$.
+
+\textbf{Two approaches for insurance:}
+\begin{enumerate}
+  \item Model \texttt{Claims} directly (with log link)
+  \item Model average claim size (\texttt{Claims/Holders}) with \texttt{weights = Holders}
+\end{enumerate}
+\end{keypoint}
+
+```{r gamma-model}
+# Gamma requires STRICTLY POSITIVE responses (no zeros)
+# Claims can contain zeros, so we need to handle this
+# Option: add a small constant, or filter out zero rows
+Insurance_pos <- Insurance[Insurance$Claims > 0, ]
+cat("Rows with Claims > 0:", nrow(Insurance_pos), "out of", nrow(Insurance), "\n")
+
+# Approach 1: Gamma regression on Claims (positive subset)
+gamma_model <- glm(Claims ~ District + Group + Age,
+                   family = Gamma(link = "log"),
+                   data = Insurance_pos)
+summary(gamma_model)
+```
+
+```{r gamma-weighted}
+# Approach 2: Model average claim rate with weights
+Insurance_pos$AvgClaimRate <- Insurance_pos$Claims / Insurance_pos$Holders
+
+gamma_model_w <- glm(AvgClaimRate ~ District + Group + Age,
+                     family = Gamma(link = "log"),
+                     data = Insurance_pos,
+                     weights = Holders)
+summary(gamma_model_w)
+```
+
+**Question from lab:** *We had to do an offset for Poisson, what about Gamma?*
+
+> For Gamma regression on the **rate** (Claims/Holders), we use `weights = Holders` instead of `offset()`. The weights tell the model that groups with more policyholders should have more influence. The offset approach is specific to Poisson/count models where we want to model rates of count data.
+
+## Maximum Likelihood Estimation (MLE)
+
+> **Question:** Demonstrate MLE for Poisson regression. Write the Poisson log-likelihood manually and use `optim()` to find the coefficients. Note: you will need to manually create dummy variables for categorical predictors like `District`.
+
+\begin{keypoint}
+\textbf{Poisson log-likelihood:}
+$$\ell(\beta) = \sum_{i=1}^{n} \left[ y_i \cdot X_i'\beta - \exp(X_i'\beta) - \log(y_i!) \right]$$
+With offset: replace $X_i'\beta$ with $X_i'\beta + \log(\text{Holders}_i)$.
+\end{keypoint}
+
+```{r poisson-mle}
+# Build the design matrix — this automatically creates dummy variables
+# for categorical predictors (District, Group, Age)
+X <- model.matrix(~ District + Group + Age, data = Insurance)
+y <- Insurance$Claims
+offset_term <- log(Insurance$Holders)
+
+# Define the Poisson negative log-likelihood
+neg_poisson_loglik <- function(beta, X, y, offset) {
+  # Linear predictor: eta = X * beta + offset
+  eta <- X %*% beta + offset
+  # Lambda (expected count) = exp(eta)
+  lambda <- exp(eta)
+  # Poisson log-likelihood (ignoring the log(y!) constant)
+  ll <- sum(y * eta - lambda)
+  return(-ll)  # Return negative for minimisation
+}
+
+# Starting values: zeros for all coefficients
+init_beta <- rep(0, ncol(X))
+
+# Optimise
+mle_result <- optim(init_beta, neg_poisson_loglik,
+                    X = X, y = y, offset = offset_term,
+                    method = "BFGS",
+                    control = list(maxit = 1000))
+
+# Compare MLE with glm() coefficients
+cat("=== Coefficient Comparison ===\n\n")
+comparison <- data.frame(
+  glm = round(coef(poisson_model), 6),
+  MLE = round(mle_result$par, 6),
+  Diff = round(coef(poisson_model) - mle_result$par, 8)
+)
+print(comparison)
+```
+
+\begin{examtip}
+\textbf{Manual MLE steps for Poisson:}
+\begin{enumerate}
+  \item Build the design matrix with \texttt{model.matrix()} --- this handles dummy variable creation for factors
+  \item Write the Poisson log-likelihood: $\sum(y_i \eta_i - e^{\eta_i})$ where $\eta_i = X_i'\beta + \text{offset}_i$
+  \item Use \texttt{optim()} with method \texttt{"BFGS"} to minimise the \textbf{negative} log-likelihood
+  \item Verify the result matches \texttt{glm()} output
+\end{enumerate}
+\end{examtip}
+
+## Model Comparison
+
+> **Question:** Compare Poisson, Negative Binomial, and Gamma models using AIC, BIC, and residual deviance. Which model should we use?
+
+```{r model-comparison}
+cat("================================================================\n")
+cat("            MODEL COMPARISON: Insurance Claims\n")
+cat("================================================================\n\n")
+
+models <- list(Poisson = poisson_model, NB = nb_model, Gamma = gamma_model)
+
+comp_df <- data.frame(
+  Model = names(models),
+  AIC = sapply(models, AIC),
+  BIC = sapply(models, BIC),
+  Deviance = sapply(models, deviance),
+  df = sapply(models, df.residual),
+  `Dev/df` = sapply(models, function(m) round(deviance(m)/df.residual(m), 3))
+)
+print(comp_df, row.names = FALSE)
+
+cat("\n=> Lower AIC/BIC is better.\n")
+cat("=> Deviance/df close to 1 indicates good fit.\n")
+cat("=> Best model:", comp_df$Model[which.min(comp_df$AIC)], "(by AIC)\n")
+```
+
+\begin{keypoint}
+\textbf{Interpreting results:}
+\begin{itemize}
+  \item The coefficients in log-link models (Poisson, NB, Gamma) describe \textbf{multiplicative changes} in the expected response: $\exp(\hat{\beta})$ gives the \textbf{rate ratio}.
+  \item Use \textbf{deviance/residual plots} to diagnose model fit.
+  \item Use \textbf{AIC/BIC} for model selection (lower is better).
+\end{itemize}
+\end{keypoint}
+
+\newpage
+
+# Bike Sharing
+
+> **Question:** Using the Bike Sharing Dataset (contains daily counts of bike rentals with weather and seasonal factors):
+>
+> - Load and clean the dataset as necessary
+> - Identify variables suitable for GLM modelling
+> - Fit Poisson, Negative Binomial, and Gamma regressions
+> - Perform MLE for a selected parameter and compare with GLM output
+
+```{r bike-data}
+# Load the daily bike sharing dataset
+# Available at: https://archive.ics.uci.edu/ml/datasets/bike+sharing+dataset
+bike <- read.csv("bike_data/day.csv")
+
+head(bike)
+str(bike)
+
+# Key variables:
+# cnt = total daily bike rentals (count response)
+# season, weathersit = categorical predictors
+# temp, atemp = temperature (normalised)
+# hum = humidity, windspeed = wind speed
+# yr = year (0=2011, 1=2012)
+# workingday = 1 if working day, 0 otherwise
+
+# Convert categorical variables to factors
+bike$season <- factor(bike$season, labels = c("Spring", "Summer", "Fall", "Winter"))
+bike$weathersit <- factor(bike$weathersit, labels = c("Clear", "Mist", "LightPrecip"))
+bike$workingday <- factor(bike$workingday)
+bike$yr <- factor(bike$yr)
+```
+
+## Poisson Regression
+
+> **Question:**
+>
+> - Identify a response variable that represents count data
+> - Fit a Poisson GLM with at least 2 predictors
+> - Interpret the coefficients
+> - Check for overdispersion (Residual Deviance / df)
+
+```{r bike-poisson}
+# cnt (total daily rentals) is a count variable
+# Fit Poisson regression with multiple predictors
+bike_pois <- glm(cnt ~ season + weathersit + temp + windspeed + yr + workingday,
+                 family = poisson, data = bike)
+summary(bike_pois)
+```
+
+```{r bike-poisson-overdisp}
+# Check overdispersion
+cat("Residual Deviance:", deviance(bike_pois), "\n")
+cat("Degrees of Freedom:", df.residual(bike_pois), "\n")
+cat("Ratio:", round(deviance(bike_pois) / df.residual(bike_pois), 2), "\n\n")
+
+if (deviance(bike_pois) / df.residual(bike_pois) > 2) {
+  cat("WARNING: Severe overdispersion detected!\n")
+  cat("Variance >> Mean => Poisson assumption violated.\n")
+  cat("Consider Negative Binomial model.\n")
+}
+```
+
+**Coefficient interpretation (Poisson with log link):**
+
+```{r bike-poisson-interpret}
+# Exponentiated coefficients = multiplicative effects (rate ratios)
+cat("Rate Ratios (exp of coefficients):\n")
+round(exp(coef(bike_pois)), 4)
+```
+
+> The exponentiated coefficients are **rate ratios**: e.g. if `exp(coef for Summer)` = 1.3, then Summer has 30% more rentals than the reference season (Spring), holding other variables constant.
+
+## Negative Binomial Regression
+
+> **Question:** If overdispersion is detected, fit a Negative Binomial model. Compare model performance with Poisson using AIC or another criterion. Interpret the results.
+
+```{r bike-nb}
+# Fit NB model to handle overdispersion
+bike_nb <- glm.nb(cnt ~ season + weathersit + temp + windspeed + yr + workingday,
+                  data = bike)
+summary(bike_nb)
+
+cat("\nEstimated theta:", bike_nb$theta, "\n")
+cat("(Smaller theta => more overdispersion; theta -> Inf => Poisson)\n")
+```
+
+```{r bike-compare-pois-nb}
+cat("=== Poisson vs Negative Binomial ===\n")
+cat("Poisson AIC:", AIC(bike_pois), "\n")
+cat("NB AIC:     ", AIC(bike_nb), "\n\n")
+cat("Difference: ", AIC(bike_pois) - AIC(bike_nb), "(positive = NB is better)\n")
+```
+
+## Gamma Regression
+
+> **Question:** Identify a continuous, positive response variable suitable for Gamma regression. Fit a Gamma regression model and compare it to an alternative linear model. Interpret the estimated coefficients and assess the goodness of fit.
+
+```{r bike-gamma}
+# Use temp (temperature) as response — continuous, positive
+# Or use 'cnt' treated as continuous positive
+# Let's model the registered user count as continuous positive
+bike_gamma <- glm(cnt ~ season + weathersit + temp + windspeed + yr,
+                  family = Gamma(link = "log"),
+                  data = bike)
+summary(bike_gamma)
+
+# Compare with a standard linear model
+bike_lm <- lm(cnt ~ season + weathersit + temp + windspeed + yr,
+              data = bike)
+
+cat("\n=== Gamma vs Linear Model ===\n")
+cat("Gamma AIC:", AIC(bike_gamma), "\n")
+cat("Linear AIC:", AIC(bike_lm), "\n")
+```
+
+## MLE Estimation of a Parameter
+
+> **Question:** Select a parameter of interest from one of the models. Define the likelihood function. Use numerical optimisation (MLE) to estimate it. Compare the MLE result with the GLM estimate.
+
+```{r bike-mle}
+# Manual MLE for the Poisson model (a simpler version with fewer predictors)
+bike_simple <- glm(cnt ~ temp + windspeed, family = poisson, data = bike)
+
+X_bike <- model.matrix(~ temp + windspeed, data = bike)
+y_bike <- bike$cnt
+
+# Poisson negative log-likelihood
+neg_pois_ll <- function(beta) {
+  eta <- X_bike %*% beta
+  lambda <- exp(eta)
+  -sum(y_bike * eta - lambda)
+}
+
+# Optimise
+mle_bike <- optim(rep(0, ncol(X_bike)), neg_pois_ll, method = "BFGS")
+
+cat("=== MLE vs GLM ===\n")
+cat("glm() coefficients:\n")
+print(round(coef(bike_simple), 6))
+cat("\nMLE coefficients:\n")
+print(round(mle_bike$par, 6))
+cat("\nThey match! confirming glm() maximises the same likelihood.\n")
+```
+
+\newpage
+
+# Density Estimation
+
+\begin{keypoint}
+\textbf{Density estimation} is about estimating the probability density function (pdf) from observed data. Two main approaches:
+\begin{itemize}
+  \item \textbf{Histograms:} Simplest approach, but results depend heavily on bin width and placement
+  \item \textbf{Kernel Density Estimation (KDE):} Smoother approach that places a ``bump'' (kernel) at each data point and sums them up
+\end{itemize}
+\end{keypoint}
+
+> **Question:** Load in turtles and Old Faithful data for the density estimation exercises.
+
+```{r density-data}
+# Turtles data: sea turtle carapace lengths (mm)
+# This is a commonly used dataset for density estimation examples
+Turtles <- c(93, 120, 135, 140, 140, 141, 142, 145, 145, 146,
+             148, 150, 155, 155, 158, 160, 160, 163, 165, 168,
+             170, 170, 172, 175, 178, 180, 182, 185, 190, 198,
+             200, 205, 210, 218, 225, 230, 240, 250, 260, 280)
+
+# Old Faithful geyser waiting times
+data(faithful)
+Waiting <- faithful$waiting
+
+cat("Turtles: n =", length(Turtles), ", range =", range(Turtles), "\n")
+cat("Waiting: n =", length(Waiting), ", range =", range(Waiting), "\n")
+```
+
+## Mucking Around with Histograms
+
+> **Question:**
+>
+> 1. Draw a histogram of the Turtles data with breaks that start at 0 and increment by 20.
+> 2. Draw a histogram of the Waiting times data with breaks that start at 40 and increment by 2.
+
+```{r hist-turtles}
+# Histogram 1: Turtles with breaks from 0 to max, increment = 20
+hist(Turtles,
+     breaks = seq(0, max(Turtles) + 20, by = 20),
+     main = "Histogram of Turtle Carapace Lengths",
+     xlab = "Length (mm)", col = "lightblue", border = "white",
+     freq = FALSE)  # freq=FALSE shows density instead of frequency
+```
+
+```{r hist-waiting}
+# Histogram 2: Waiting times with breaks from 40, increment = 2
+hist(Waiting,
+     breaks = seq(40, max(Waiting) + 2, by = 2),
+     main = "Histogram of Old Faithful Waiting Times",
+     xlab = "Waiting Time (minutes)", col = "salmon", border = "white",
+     freq = FALSE)
+```
+
+\begin{examtip}
+The \texttt{breaks} argument in \texttt{hist()} can take:
+\begin{itemize}
+  \item A single number: approximate number of bins
+  \item A vector: exact breakpoints (e.g.\ \texttt{seq(0, 300, by=20)})
+\end{itemize}
+Use \texttt{freq = FALSE} to show the \textbf{density} (area sums to 1) rather than raw counts.
+\end{examtip}
+
+## Use of density
+
+> **Question:** Kernel Density Estimates in R are done using the `density()` function. Possible values for `kernel` are `"rectangular"`, `"gaussian"`, and `"epanechnikov"`. The bandwidth is set by `bw` (e.g. `bw="nrd0"` for rule-of-thumb, `bw="ucv"` for cross-validation).
+>
+> 1. Construct a rectangular kernel density estimate for the waiting time data with bandwidth equal to 1.
+> 2. Repeat above using a bandwidth of 5.
+> 3. Repeat 1 and 2 using an Epanechnikov kernel.
+> 4. Use an Epanechnikov kernel and the (default) rule-of-thumb bandwidth.
+> 5. As in 4, but with the cross-validation bandwidth. Which of the latter two has smaller bandwidth?
+
+\begin{keypoint}
+\textbf{Kernel Density Estimation (KDE):}
+$$\hat{f}(x) = \frac{1}{nh}\sum_{i=1}^{n} K\left(\frac{x - X_i}{h}\right)$$
+where:
+\begin{itemize}
+  \item $K$ = kernel function (shape of the bump)
+  \item $h$ = bandwidth (controls smoothness)
+  \item $n$ = sample size
+\end{itemize}
+\textbf{Small bandwidth} = wiggly (overfitting). \textbf{Large bandwidth} = oversmoothing.
+\end{keypoint}
+
+### 1. Rectangular kernel, bandwidth = 1
+
+```{r kde-rect-1}
+d1 <- density(Waiting, kernel = "rectangular", bw = 1)
+plot(d1, main = "Rectangular Kernel, bw = 1",
+     xlab = "Waiting Time", col = "blue", lwd = 2)
+rug(Waiting)  # Add tick marks for each data point
+```
+
+### 2. Rectangular kernel, bandwidth = 5
+
+```{r kde-rect-5}
+d2 <- density(Waiting, kernel = "rectangular", bw = 5)
+plot(d2, main = "Rectangular Kernel, bw = 5",
+     xlab = "Waiting Time", col = "red", lwd = 2)
+rug(Waiting)
+```
+
+### 3. Epanechnikov kernel, bandwidth = 1 and 5
+
+```{r kde-epan}
+d3 <- density(Waiting, kernel = "epanechnikov", bw = 1)
+d4 <- density(Waiting, kernel = "epanechnikov", bw = 5)
+
+par(mfrow = c(1, 2))
+plot(d3, main = "Epanechnikov, bw = 1", col = "blue", lwd = 2)
+rug(Waiting)
+plot(d4, main = "Epanechnikov, bw = 5", col = "red", lwd = 2)
+rug(Waiting)
+par(mfrow = c(1, 1))
+```
+
+### 4. Epanechnikov with rule-of-thumb bandwidth
+
+```{r kde-nrd0}
+# bw = "nrd0" is the default rule-of-thumb bandwidth (Silverman's rule)
+d5 <- density(Waiting, kernel = "epanechnikov", bw = "nrd0")
+plot(d5, main = "Epanechnikov, Rule-of-Thumb Bandwidth",
+     xlab = "Waiting Time", col = "darkgreen", lwd = 2)
+rug(Waiting)
+cat("Rule-of-thumb bandwidth (nrd0):", d5$bw, "\n")
+```
+
+### 5. Epanechnikov with cross-validation bandwidth
+
+```{r kde-ucv}
+# bw = "ucv" uses unbiased cross-validation to select bandwidth
+d6 <- density(Waiting, kernel = "epanechnikov", bw = "ucv")
+plot(d6, main = "Epanechnikov, Cross-Validation Bandwidth",
+     xlab = "Waiting Time", col = "purple", lwd = 2)
+rug(Waiting)
+cat("Cross-validation bandwidth (ucv):", d6$bw, "\n")
+```
+
+**Comparison:**
+
+```{r kde-compare-bw}
+cat("=== Bandwidth Comparison ===\n")
+cat("Rule-of-thumb (nrd0):", d5$bw, "\n")
+cat("Cross-validation (ucv):", d6$bw, "\n")
+cat("\nSmaller bandwidth:", ifelse(d5$bw < d6$bw, "nrd0", "ucv"), "\n")
+
+# Plot both together
+plot(d5, main = "Comparing Bandwidth Selection Methods",
+     xlab = "Waiting Time", col = "darkgreen", lwd = 2,
+     ylim = range(c(d5$y, d6$y)))
+lines(d6, col = "purple", lwd = 2)
+legend("topleft",
+       legend = c(paste("nrd0 (bw =", round(d5$bw, 2), ")"),
+                  paste("ucv (bw =", round(d6$bw, 2), ")")),
+       col = c("darkgreen", "purple"), lwd = 2)
+rug(Waiting)
+```
+
+\begin{examtip}
+\textbf{Bandwidth selection methods:}
+\begin{itemize}
+  \item \texttt{bw = "nrd0"}: Silverman's rule-of-thumb. Fast, but assumes data is roughly normal. Tends to oversmooth multimodal data.
+  \item \texttt{bw = "ucv"}: Unbiased Cross-Validation. Data-driven, adapts to the actual shape. Usually gives a smaller (more appropriate) bandwidth for non-normal data.
+\end{itemize}
+For bimodal data like Old Faithful, \texttt{ucv} typically gives a \textbf{smaller} bandwidth, revealing the two modes better.
+\end{examtip}
+
+## Normal Estimate
+
+> **Question:** Show using the Turtle data, that the density estimate provided by `density()` is equivalent to adding a set of Normal densities, where:
+>
+> - there is one Normal per point, centred on that point,
+> - and the standard deviation is the bandwidth of the density estimate.
+>
+> Plot the density estimation first, then overlay the sum of individual normals.
+
+\begin{keypoint}
+\textbf{The Gaussian KDE is literally:}
+$$\hat{f}(x) = \frac{1}{n} \sum_{i=1}^{n} \phi\left(x; X_i, h^2\right)$$
+where $\phi(x; \mu, \sigma^2)$ is the normal density with mean $\mu$ and variance $\sigma^2$. Each data point contributes one small normal ``bump'', and the KDE is their average.
+\end{keypoint}
+
+```{r normal-estimate}
+# Step 1: Compute the Gaussian KDE using density()
+turtle_density <- density(Turtles, kernel = "gaussian")
+
+# Step 2: Extract the bandwidth
+bandwidth <- turtle_density$bw
+cat("Bandwidth:", bandwidth, "\n")
+
+# Step 3: Create a grid of x values
+n <- length(Turtles)
+x_grid <- turtle_density$x  # Use same grid as density()
+
+# Step 4: Compute individual normal densities
+# Each observation contributes a Normal(mean = X_i, sd = bandwidth)
+individual_densities <- matrix(0, nrow = length(x_grid), ncol = n)
+for (i in 1:n) {
+  individual_densities[, i] <- dnorm(x_grid, mean = Turtles[i], sd = bandwidth)
+}
+
+# Step 5: The KDE is the AVERAGE of the individual densities
+# (not the sum — we divide by n)
+manual_kde <- rowMeans(individual_densities)
+
+# Step 6: Plot and compare
+plot(turtle_density, main = "KDE = Average of Individual Normals",
+     xlab = "Turtle Length", lwd = 3, col = "black")
+
+# Plot each individual normal (scaled by 1/n) in light grey
+for (i in 1:n) {
+  lines(x_grid, individual_densities[, i] / n,
+        col = rgb(0.5, 0.5, 0.8, alpha = 0.3), lwd = 0.5)
+}
+
+# Plot the manual KDE (should overlay perfectly on density())
+lines(x_grid, manual_kde, col = "red", lwd = 2, lty = 2)
+
+legend("topright",
+       legend = c("density() KDE", "Manual sum of Normals", "Individual Normals / n"),
+       col = c("black", "red", rgb(0.5, 0.5, 0.8, 0.5)),
+       lwd = c(3, 2, 1), lty = c(1, 2, 1))
+
+# Verify they are identical
+cat("Max difference between density() and manual KDE:",
+    max(abs(turtle_density$y - manual_kde)), "\n")
+```
+
+> The manual sum-of-normals (red dashed) and `density()` output (black solid) are virtually identical, confirming that Gaussian KDE is simply the average of $n$ normal densities centred at each data point with $\text{sd} = \text{bandwidth}$.
+
+### Different Bandwidths
+
+> **Question:** Use a loop to visualise how different bandwidths (5, 15, 30, 50) affect the smoothness of the density estimate.
+
+```{r bandwidth-comparison, fig.height=6, fig.width=7}
+bandwidths <- c(5, 15, 30, 50)
+colors <- c("blue", "red", "green4", "orange")
+
+# First compute the range for all plots
+all_densities <- lapply(bandwidths, function(bw) {
+  density(Turtles, kernel = "gaussian", bw = bw)
+})
+
+ylim_max <- max(sapply(all_densities, function(d) max(d$y)))
+
+plot(NULL, xlim = range(Turtles) + c(-60, 60), ylim = c(0, ylim_max * 1.1),
+     main = "Effect of Bandwidth on KDE",
+     xlab = "Turtle Length", ylab = "Density")
+
+for (i in seq_along(bandwidths)) {
+  lines(all_densities[[i]], col = colors[i], lwd = 2)
+}
+
+legend("topright",
+       legend = paste("bw =", bandwidths),
+       col = colors, lwd = 2, cex = 0.9)
+rug(Turtles)
+```
+
+\begin{warning}
+\textbf{Bandwidth trade-off:}
+\begin{itemize}
+  \item \textbf{Small bandwidth} (e.g.\ 5): Very wiggly, captures noise (overfitting/high variance)
+  \item \textbf{Large bandwidth} (e.g.\ 50): Very smooth, hides real features (underfitting/high bias)
+  \item \textbf{Optimal bandwidth}: Balances bias and variance. Use \texttt{bw = "nrd0"} or \texttt{bw = "ucv"} for automatic selection.
+\end{itemize}
+\end{warning}
+
+\newpage
+
+# Exam Quick Reference
+
+\begin{tcolorbox}[colback=yellow!10!white, colframe=orange!80!black, title=Key R Functions for This Lab]
+\begin{tabular}{ll}
+\texttt{glm(y $\sim$ x, family=poisson)} & Poisson regression \\
+\texttt{glm.nb(y $\sim$ x)} & Negative Binomial (from MASS) \\
+\texttt{glm(y $\sim$ x, family=Gamma(link="log"))} & Gamma regression \\
+\texttt{offset(log(exposure))} & Model rates instead of counts \\
+\texttt{deviance(model) / df.residual(model)} & Check overdispersion \\
+\texttt{model.matrix($\sim$ predictors)} & Build design matrix with dummies \\
+\texttt{optim(init, fn, method="BFGS")} & Numerical MLE \\
+\texttt{AIC(model)}, \texttt{BIC(model)} & Model comparison \\
+\texttt{hist(x, breaks=seq(...))} & Histogram with specified bins \\
+\texttt{density(x, kernel, bw)} & Kernel density estimation \\
+\texttt{bw.nrd0(x)} & Rule-of-thumb bandwidth \\
+\texttt{bw.ucv(x)} & Cross-validation bandwidth \\
+\texttt{dnorm(x, mean, sd)} & Normal density (for manual KDE) \\
+\end{tabular}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=yellow!10!white, colframe=orange!80!black, title=Key Formulas]
+\textbf{Poisson Log-Likelihood:}
+$$\ell(\beta) = \sum_{i}\left[y_i(X_i'\beta + \text{offset}_i) - \exp(X_i'\beta + \text{offset}_i)\right]$$
+
+\textbf{Overdispersion Check:}
+$$\frac{\text{Residual Deviance}}{\text{df}} \approx 1 \implies \text{good fit}; \quad \gg 1 \implies \text{overdispersion}$$
+
+\textbf{Negative Binomial:} $\text{Var}(Y) = \mu + \mu^2/\theta$ (extra parameter $\theta$ for overdispersion)
+
+\textbf{Gamma:} $\text{Var}(Y) = \mu^2/\nu$ (variance proportional to mean$^2$)
+
+\textbf{Kernel Density Estimator:}
+$$\hat{f}(x) = \frac{1}{nh}\sum_{i=1}^{n}K\left(\frac{x-X_i}{h}\right)$$
+
+\textbf{Gaussian KDE equivalence:}
+$$\hat{f}(x) = \frac{1}{n}\sum_{i=1}^{n}\phi(x; X_i, h^2)$$
+
+\textbf{Rate Ratio (log-link models):} $\exp(\hat{\beta})$ = multiplicative change in expected response
+\end{tcolorbox}

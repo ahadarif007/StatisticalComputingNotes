@@ -1,0 +1,847 @@
+---
+title: "Statistical Computing — Week 8: KDE, Classification & Mixture Models"
+subtitle: "Complete Lab Solutions with Exam-Ready Explanations"
+author: "Week 8 Lab"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    highlight: tango
+    latex_engine: xelatex
+    extra_dependencies: ["amsmath", "amssymb", "float"]
+header-includes:
+  - \usepackage{framed}
+  - \usepackage{xcolor}
+  - \definecolor{examtip}{RGB}{0, 100, 150}
+  - \definecolor{shadecolor}{RGB}{230, 240, 250}
+  - \newcommand{\examtip}[1]{\begin{snugshade}\textcolor{examtip}{\textbf{Exam Tip:}} #1\end{snugshade}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 5,
+                      fig.pos = "H", out.width = "85%", fig.align = "center")
+options(digits = 4)
+```
+
+\newpage
+
+# Background Theory You Need to Know
+
+Before diving into code, here is the theory behind every technique in this lab. **Understanding these ideas is what gets you marks in an exam.**
+
+## What is Kernel Density Estimation (KDE)?
+
+A histogram is a rough way to estimate the shape of data. KDE is a **smooth** version. The idea:
+
+- Place a small "bump" (called a **kernel**) on top of every data point.
+- Add all the bumps together and normalise.
+- The result is a smooth curve that estimates the true probability density.
+
+Mathematically, for $n$ data points $x_1, \ldots, x_n$:
+
+$$\hat{f}(x) = \frac{1}{n h} \sum_{i=1}^{n} K\left(\frac{x - x_i}{h}\right)$$
+
+where:
+
+- $K$ is the **kernel function** (usually Gaussian: $K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2}$)
+- $h$ is the **bandwidth** — this controls how smooth the estimate is
+
+\examtip{The bandwidth $h$ is the single most important choice. Too small $\to$ wiggly/noisy. Too large $\to$ oversmoothed, hides real features. Bandwidth selection methods: ``nrd0'' (rule of thumb), ``ucv'' (cross-validation).}
+
+## What is a Nonparametric Bayes Classifier?
+
+Given two classes (e.g. smoker/non-smoker), we want $P(\text{class} = 1 \mid x)$. By Bayes' theorem:
+
+$$P(Y = 1 \mid x) = \frac{\pi_1 \, \hat{f}_1(x)}{\pi_0 \, \hat{f}_0(x) + \pi_1 \, \hat{f}_1(x)}$$
+
+where:
+
+- $\hat{f}_0(x)$ = KDE of $x$ for class 0 observations
+- $\hat{f}_1(x)$ = KDE of $x$ for class 1 observations  
+- $\pi_1 = P(Y=1)$ = prior probability (proportion of class 1 in data)
+- $\pi_0 = 1 - \pi_1$
+
+We classify as class 1 if $P(Y=1 \mid x) > 0.5$.
+
+\examtip{There are two ways to compute the denominator: (1) the \textbf{mixture} denominator $\pi_0 f_0 + \pi_1 f_1$, or (2) the \textbf{marginal} density $f(x)$ estimated from ALL data. Both should give similar results. The mixture version is theoretically exact.}
+
+## What is a Mixture Model?
+
+A **mixture model** says the data comes from $K$ different sub-populations (components), each with its own distribution. For a two-component Gaussian mixture:
+
+$$f(x) = \lambda \, \phi(x; \mu_1, \sigma_1) + (1 - \lambda) \, \phi(x; \mu_2, \sigma_2)$$
+
+where $\phi(x; \mu, \sigma)$ is the Normal density with mean $\mu$ and standard deviation $\sigma$, and $\lambda$ is the **mixing proportion** (probability a random observation comes from component 1).
+
+## The EM Algorithm
+
+We can't directly maximise the likelihood of a mixture (the log of a sum is hard). Instead we iterate:
+
+1. **E-step (Expectation):** For each data point, compute the *responsibility* $\gamma_i$ — the probability that point $i$ belongs to component 1:
+$$\gamma_i = \frac{\lambda \, \phi(x_i; \mu_1, \sigma_1)}{\lambda \, \phi(x_i; \mu_1, \sigma_1) + (1-\lambda) \, \phi(x_i; \mu_2, \sigma_2)}$$
+
+2. **M-step (Maximisation):** Update the parameters using weighted averages:
+$$\mu_1 = \frac{\sum \gamma_i x_i}{\sum \gamma_i}, \quad \sigma_1^2 = \frac{\sum \gamma_i (x_i - \mu_1)^2}{\sum \gamma_i}, \quad \lambda = \frac{\sum \gamma_i}{n}$$
+
+3. **Repeat** until convergence (parameters stop changing).
+
+\examtip{The EM algorithm is \textbf{guaranteed} to increase the likelihood at every step, but can get stuck in local maxima. That's why \textbf{initial values matter} — different starting points can give different answers. Always try several.}
+
+## AIC and BIC for Model Selection
+
+How many components do we need? More components always fit better, but we risk **overfitting**. AIC and BIC penalise complexity:
+
+$$\text{AIC} = -2 \log L + 2k, \qquad \text{BIC} = -2 \log L + k \log n$$
+
+where $k$ = number of parameters, $n$ = sample size. **Lower is better.**
+
+\examtip{BIC penalises more than AIC (because $\log n > 2$ when $n > 7$). BIC tends to prefer simpler models. For a $K$-component Normal mixture, $k = 3K - 1$ (each component has $\mu$, $\sigma$, plus $K-1$ free mixing proportions).}
+
+\newpage
+
+# Setup: Install and Load Packages
+
+```{r packages, eval=FALSE}
+# Run this ONCE to install
+install.packages(c("mixtools", "MASS", "CircNNTSR", "stats4"),
+                 repos = "https://cloud.r-project.org")
+```
+
+```{r load-packages}
+library(mixtools)     # normalmixEM for fitting mixture models
+library(MASS)         # galaxies dataset
+library(stats4)       # mle() function
+```
+
+\newpage
+
+# Build a Nonparametric Classifier
+
+## Smoking / Birth Weight Classifier
+
+We predict smoking status (`smoke`) from birth weight (`bwt`). The idea: estimate the density of birth weight separately for smokers and non-smokers, then use Bayes' theorem.
+
+```{r classifier-load}
+# Load the smoking/birthweight data
+# UPDATE THIS PATH to wherever you saved the CSV from Moodle:
+smoking <- read.csv("smoking.csv")  # columns: bwt, smoke (0/1)
+
+# If you don't have the CSV, you can use the birthwt dataset from MASS:
+# library(MASS)
+# smoking <- data.frame(bwt = birthwt$bwt, smoke = birthwt$smoke)
+
+head(smoking)
+table(smoking$smoke)
+```
+
+### Step 1: Estimate the Densities
+
+```{r classifier-densities}
+lo <- min(smoking$bwt) - 100
+hi <- max(smoking$bwt) + 100
+
+# f  = density of bwt for ALL observations (marginal density)
+# f0 = density of bwt for non-smokers (smoke = 0)
+# f1 = density of bwt for smokers (smoke = 1)
+
+f  <- density(smoking$bwt, from = lo, to = hi)
+f0 <- density(smoking$bwt[smoking$smoke == 0], from = lo, to = hi)
+f1 <- density(smoking$bwt[smoking$smoke == 1], from = lo, to = hi)
+```
+
+### Step 2: Plot the Densities
+
+```{r classifier-density-plots, fig.height=7}
+par(mfrow = c(2, 2), mar = c(4, 3, 2, 1) + 0.1, cex = 0.8)
+plot(f,  main = "Density of bwt (all)",       lwd = 2)
+plot(f0, main = "Density of bwt (smoke=0)", col = 2, lwd = 2)
+plot(f1, main = "Density of bwt (smoke=1)", col = 3, lwd = 2)
+plot(f0, main = "Both densities overlaid",  col = 2, lwd = 2)
+lines(f1, col = 3, lwd = 2)
+legend("topright", legend = c("Non-smoker", "Smoker"),
+       col = c(2, 3), lwd = 2, cex = 0.8)
+```
+
+**What to look for:** If the two densities are well-separated, the classifier will work well. If they overlap heavily, classification will be poor (which is expected here — birth weight alone is a weak predictor of smoking).
+
+### Step 3: Compute Posterior Probability
+
+Using Bayes' theorem:
+
+$$P(\text{smoke}=1 \mid \text{bwt}) = \frac{\pi_1 \hat{f}_1(\text{bwt})}{\pi_0 \hat{f}_0(\text{bwt}) + \pi_1 \hat{f}_1(\text{bwt})}$$
+
+```{r classifier-posterior}
+p <- mean(smoking$smoke)  # prior P(smoke = 1)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2, 1) + 0.1, cex = 0.8)
+
+# Method 1: Mixture denominator (theoretically exact)
+posterior_mix <- f1$y * p / (p * f1$y + (1 - p) * f0$y)
+plot(f$x, posterior_mix, type = "l", lwd = 2,
+     xlab = "Birth Weight (g)", ylab = "P(smoke=1 | bwt)",
+     main = "Mixture Denominator")
+abline(h = 0.5, lty = 3, col = "red")
+
+# Method 2: Marginal denominator
+posterior_marg <- f1$y * p / f$y
+plot(f$x, posterior_marg, type = "l", lwd = 2,
+     xlab = "Birth Weight (g)", ylab = "P(smoke=1 | bwt)",
+     main = "Marginal Denominator")
+abline(h = 0.5, lty = 3, col = "red")
+```
+
+**Interpretation:** The red dashed line at 0.5 is the classification boundary. Where the curve is above 0.5, we classify as "smoker". Both methods should give very similar results.
+
+\examtip{If the posterior is mostly flat near the prior $\pi_1$, the predictor ($x$) carries very little information about the class. The classifier is barely better than guessing.}
+
+\newpage
+
+# Old Faithful: Multivariate Density Estimation
+
+## Sequential Waiting Times
+
+The idea: is the waiting time for the **next** eruption related to the **current** waiting time?
+
+```{r faithful-data}
+Waiting <- faithful$waiting
+
+# x = current waiting time (drop the last one)
+# y = NEXT waiting time (drop the first one)
+x <- Waiting[-length(Waiting)]
+y <- Waiting[-1]
+```
+
+### Scatterplot
+
+```{r faithful-scatter}
+plot(x, y, pch = 19, col = rgb(0, 0, 0.6, 0.5), cex = 0.8,
+     xlab = "Current Waiting Time (min)",
+     ylab = "Next Waiting Time (min)",
+     main = "Sequential Waiting Times — Old Faithful")
+```
+
+**Comment:** You should see **two clusters** — one where both current and next waiting times are short, and one where both are long. There may also be "transition" points (short $\to$ long and long $\to$ short). This suggests the eruptions alternate between two regimes.
+
+### 2D Kernel Density Estimate
+
+```{r faithful-2d, fig.height=6}
+# Compute 2D density
+kde2d_fit <- kde2d(x, y, n = 50)
+
+# Filled contour plot
+par(mfrow = c(1, 2))
+contour(kde2d_fit, nlevels = 15, lwd = 1.5,
+        xlab = "Current Wait", ylab = "Next Wait",
+        main = "2D KDE — Contour")
+
+# Perspective (3D surface) plot
+persp(kde2d_fit, theta = 30, phi = 25, shade = 0.4,
+      xlab = "Current", ylab = "Next", zlab = "Density",
+      main = "2D KDE — Surface", col = "lightblue")
+```
+
+**Comment:** The 2D density clearly shows **two modes** (peaks). This confirms the bimodal, clustered structure: Old Faithful alternates between two eruption regimes with distinct waiting times.
+
+\examtip{2D KDE is done with \texttt{kde2d()} from the MASS package. It returns a grid of density values. Use \texttt{contour()}, \texttt{filled.contour()}, or \texttt{persp()} to visualise.}
+
+\newpage
+
+# Bridging Exercise: Galaxy Velocities
+
+## Load and Explore
+
+```{r galaxies-data}
+library(MASS)
+data(galaxies)
+
+# galaxies is just a numeric vector of 82 velocities (km/s)
+cat("Number of galaxies:", length(galaxies), "\n")
+summary(galaxies)
+```
+
+## Histogram
+
+```{r galaxies-hist}
+hist(galaxies, breaks = 30, col = "grey85", border = "white",
+     main = "Galaxy Velocities", xlab = "Velocity (km/s)",
+     probability = TRUE)
+```
+
+**How many modes?** You should see roughly **3 to 4 modes** — a big cluster around 20,000, something near 10,000, and bumps around 23,000 and 34,000.
+
+## Overlay Different KDE Estimates
+
+```{r galaxies-kde, fig.height=6}
+hist(galaxies, breaks = 30, col = "grey85", border = "white",
+     probability = TRUE, ylim = c(0, 0.00018),
+     main = "Galaxy Velocities — Comparing Bandwidths",
+     xlab = "Velocity (km/s)")
+
+# 1. Rectangular kernel, bandwidth = 500
+d_rect <- density(galaxies, bw = 500, kernel = "rectangular")
+lines(d_rect, col = "red", lwd = 2)
+
+# 2. Gaussian kernel, rule-of-thumb bandwidth (nrd0)
+d_nrd0 <- density(galaxies, bw = "nrd0")
+lines(d_nrd0, col = "blue", lwd = 2)
+
+# 3. Gaussian kernel, cross-validation bandwidth (ucv)
+d_ucv <- density(galaxies, bw = "ucv")
+lines(d_ucv, col = "darkgreen", lwd = 2)
+
+legend("topright",
+       legend = c(paste0("Rectangular, bw=500 (h=", round(500, 0), ")"),
+                  paste0("Gaussian nrd0 (h=", round(d_nrd0$bw, 0), ")"),
+                  paste0("Gaussian ucv (h=", round(d_ucv$bw, 0), ")")),
+       col = c("red", "blue", "darkgreen"), lwd = 2, cex = 0.8)
+```
+
+**Discussion:**
+
+- **Rectangular, bw=500:** Shows the most detail / modes, but can be noisy.
+- **Gaussian nrd0:** The rule-of-thumb assumes unimodality, so it **oversmooths** multimodal data. Many bumps get hidden.
+- **Gaussian ucv:** Cross-validation adapts to the data. It usually gives the clearest picture of the true multimodal structure.
+
+\examtip{For multimodal data, the rule-of-thumb bandwidth (``nrd0'') is often too wide because it assumes a single Gaussian. Cross-validation (``ucv'' or ``SJ'') is better for discovering multiple modes.}
+
+## How Many Mixture Components?
+
+Based on the KDE, we can count roughly **3 modes** (some argue 4). So a 3-component Normal mixture is a reasonable starting point. Let's test this formally.
+
+## Fit 2- and 3-Component Mixtures
+
+```{r galaxies-mix}
+set.seed(42)
+
+# 2-component mixture
+mix2 <- normalmixEM(galaxies, k = 2, maxit = 1000, epsilon = 1e-6)
+
+# 3-component mixture
+mix3 <- normalmixEM(galaxies, k = 3, maxit = 1000, epsilon = 1e-6)
+```
+
+### Plot: 2-Component Fit
+
+```{r galaxies-mix2-plot}
+hist(galaxies, breaks = 30, col = "grey85", border = "white",
+     probability = TRUE, ylim = c(0, 0.00020),
+     main = "2-Component Normal Mixture",
+     xlab = "Velocity (km/s)")
+
+xseq <- seq(min(galaxies) - 2000, max(galaxies) + 2000, length = 500)
+for (j in 1:2) {
+  lines(xseq, mix2$lambda[j] * dnorm(xseq, mix2$mu[j], mix2$sigma[j]),
+        col = j + 1, lwd = 2)
+}
+# Total mixture density
+total2 <- mix2$lambda[1] * dnorm(xseq, mix2$mu[1], mix2$sigma[1]) +
+          mix2$lambda[2] * dnorm(xseq, mix2$mu[2], mix2$sigma[2])
+lines(xseq, total2, col = 1, lwd = 2, lty = 2)
+legend("topright", c("Comp 1", "Comp 2", "Total"),
+       col = c(2, 3, 1), lwd = 2, lty = c(1, 1, 2), cex = 0.8)
+```
+
+### Plot: 3-Component Fit
+
+```{r galaxies-mix3-plot}
+hist(galaxies, breaks = 30, col = "grey85", border = "white",
+     probability = TRUE, ylim = c(0, 0.00020),
+     main = "3-Component Normal Mixture",
+     xlab = "Velocity (km/s)")
+
+for (j in 1:3) {
+  lines(xseq, mix3$lambda[j] * dnorm(xseq, mix3$mu[j], mix3$sigma[j]),
+        col = j + 1, lwd = 2)
+}
+total3 <- Reduce("+", lapply(1:3, function(j)
+  mix3$lambda[j] * dnorm(xseq, mix3$mu[j], mix3$sigma[j])))
+lines(xseq, total3, col = 1, lwd = 2, lty = 2)
+legend("topright", c("Comp 1", "Comp 2", "Comp 3", "Total"),
+       col = c(2, 3, 4, 1), lwd = 2, lty = c(1, 1, 1, 2), cex = 0.8)
+```
+
+## AIC / BIC Comparison
+
+For a $K$-component Normal mixture, we have $k = 3K - 1$ parameters.
+
+```{r galaxies-aic-bic}
+n_gal <- length(galaxies)
+
+# Log-likelihood for a fitted mixture
+loglik_mix <- function(fit) {
+  ll <- 0
+  for (i in 1:length(fit$x)) {
+    li <- sum(fit$lambda * dnorm(fit$x[i], fit$mu, fit$sigma))
+    ll <- ll + log(li)
+  }
+  ll
+}
+
+ll2 <- loglik_mix(mix2)
+ll3 <- loglik_mix(mix3)
+
+k2 <- 3 * 2 - 1   # = 5 parameters
+k3 <- 3 * 3 - 1   # = 8 parameters
+
+aic2 <- -2 * ll2 + 2 * k2
+aic3 <- -2 * ll3 + 2 * k3
+bic2 <- -2 * ll2 + k2 * log(n_gal)
+bic3 <- -2 * ll3 + k3 * log(n_gal)
+
+cat("2-Component:  AIC =", round(aic2, 2), " BIC =", round(bic2, 2), "\n")
+cat("3-Component:  AIC =", round(aic3, 2), " BIC =", round(bic3, 2), "\n")
+cat("\nPreferred by AIC:", ifelse(aic3 < aic2, "3-component", "2-component"), "\n")
+cat("Preferred by BIC:", ifelse(bic3 < bic2, "3-component", "2-component"), "\n")
+```
+
+**Discussion:** The 3-component model should have lower AIC/BIC, agreeing with what the KDE suggested (multiple modes visible in the data).
+
+\newpage
+
+# Mixture Models — Simulated Data
+
+## Generate the Mixture Sample
+
+```{r sim-mixture}
+set.seed(1138)
+n <- 100
+lambda_true <- 0.3
+
+component <- rbinom(n, size = 1, prob = lambda_true)
+mixture_sample <- ifelse(component == 1,
+                         rnorm(n, mean = 10, sd = 5),
+                         rnorm(n, mean = 30, sd = 10))
+
+hist(mixture_sample, breaks = 20, col = "lightblue",
+     probability = TRUE, main = "Simulated 2-Component Mixture",
+     xlab = "x")
+```
+
+**True parameters:** $\lambda = 0.3$, $\mu_1 = 10$, $\sigma_1 = 5$, $\mu_2 = 30$, $\sigma_2 = 10$.
+
+## EM Algorithm — Manual Implementation
+
+Here is the EM code from lectures. Let's walk through what every line does:
+
+```{r em-manual}
+twoMix <- function(x) {
+  # ── Initialise ──
+  lambda <- 0.5                   # start with equal mixing
+  mu     <- range(x)              # mu1 = min(x), mu2 = max(x)
+  sigma  <- rep(sd(x), 2)        # both sigmas = overall SD
+  
+  repeat {
+    oldp <- c(lambda, mu, sigma)  # store old parameters
+    
+    # ── E-step: compute responsibilities ──
+    # gamma_i = P(point i belongs to component 1)
+    gamma <- lambda * dnorm(x, mu[1], sigma[1])
+    gamma <- gamma / (gamma + (1 - lambda) * dnorm(x, mu[2], sigma[2]))
+    
+    # ── M-step: update parameters ──
+    mu[1]    <- sum(gamma * x) / sum(gamma)
+    mu[2]    <- sum((1 - gamma) * x) / sum(1 - gamma)
+    sigma[1] <- sqrt(sum(gamma * (x - mu[1])^2) / sum(gamma))
+    sigma[2] <- sqrt(sum((1 - gamma) * (x - mu[2])^2) / sum(1 - gamma))
+    lambda   <- sum(gamma) / length(x)
+    
+    # ── Check convergence ──
+    diff <- sum(abs(c(lambda, mu, sigma) - oldp))
+    if (diff < 0.001) break
+  }
+  
+  return(list(lambda = lambda, mu = mu, sigma = sigma))
+}
+
+result <- twoMix(mixture_sample)
+cat("Estimated lambda:", result$lambda, "\n")
+cat("Estimated mu:    ", result$mu, "\n")
+cat("Estimated sigma: ", result$sigma, "\n")
+cat("\nTrue values: lambda=0.3, mu=(10,30), sigma=(5,10)\n")
+```
+
+\examtip{The EM algorithm is sensitive to starting values. The code initialises $\mu$ at the min and max of the data, which works well when components are separated. For badly separated components, try multiple random starts.}
+
+## How Initial Values Affect the Outcome
+
+```{r em-initial-values}
+# Try different starting configurations
+twoMix_custom <- function(x, lambda_init, mu_init, sigma_init) {
+  lambda <- lambda_init
+  mu     <- mu_init
+  sigma  <- sigma_init
+  iter   <- 0
+  
+  repeat {
+    oldp <- c(lambda, mu, sigma)
+    iter <- iter + 1
+    
+    gamma <- lambda * dnorm(x, mu[1], sigma[1])
+    gamma <- gamma / (gamma + (1 - lambda) * dnorm(x, mu[2], sigma[2]))
+    
+    mu[1]    <- sum(gamma * x) / sum(gamma)
+    mu[2]    <- sum((1 - gamma) * x) / sum(1 - gamma)
+    sigma[1] <- sqrt(sum(gamma * (x - mu[1])^2) / sum(gamma))
+    sigma[2] <- sqrt(sum((1 - gamma) * (x - mu[2])^2) / sum(1 - gamma))
+    lambda   <- sum(gamma) / length(x)
+    
+    diff <- sum(abs(c(lambda, mu, sigma) - oldp))
+    if (diff < 0.001 || iter > 500) break
+  }
+  
+  list(lambda = lambda, mu = mu, sigma = sigma, iterations = iter)
+}
+
+# Good starting values
+r1 <- twoMix_custom(mixture_sample, 0.5, c(5, 35), c(8, 8))
+cat("Start 1 (good):  mu =", round(r1$mu, 2),
+    " sigma =", round(r1$sigma, 2),
+    " lambda =", round(r1$lambda, 3), "\n")
+
+# Mediocre starting values
+r2 <- twoMix_custom(mixture_sample, 0.5, c(20, 25), c(15, 15))
+cat("Start 2 (close): mu =", round(r2$mu, 2),
+    " sigma =", round(r2$sigma, 2),
+    " lambda =", round(r2$lambda, 3), "\n")
+
+# Identical starting means (degenerate)
+r3 <- twoMix_custom(mixture_sample, 0.5, c(20, 20), c(10, 10))
+cat("Start 3 (same):  mu =", round(r3$mu, 2),
+    " sigma =", round(r3$sigma, 2),
+    " lambda =", round(r3$lambda, 3), "\n")
+```
+
+**Key insight:** When both starting means are the same, the algorithm can't distinguish the components and may converge to a degenerate solution (one component swallows everything). Always use **different** starting means.
+
+## Watch the EM Converge — Animated Iterations
+
+```{r em-animated, fig.height=8}
+# EM with plotting at each iteration
+x <- mixture_sample
+lambda <- 0.5
+mu     <- range(x)
+sigma  <- rep(sd(x), 2)
+
+par(mfrow = c(3, 3), mar = c(3, 3, 2, 1))
+xseq <- seq(min(x) - 10, max(x) + 10, length = 300)
+
+for (step in 1:9) {
+  # E-step
+  gamma <- lambda * dnorm(x, mu[1], sigma[1])
+  gamma <- gamma / (gamma + (1 - lambda) * dnorm(x, mu[2], sigma[2]))
+  
+  # M-step
+  mu[1]    <- sum(gamma * x) / sum(gamma)
+  mu[2]    <- sum((1 - gamma) * x) / sum(1 - gamma)
+  sigma[1] <- sqrt(sum(gamma * (x - mu[1])^2) / sum(gamma))
+  sigma[2] <- sqrt(sum((1 - gamma) * (x - mu[2])^2) / sum(1 - gamma))
+  lambda   <- sum(gamma) / length(x)
+  
+  # Plot
+  hist(x, breaks = 20, probability = TRUE, col = "grey90", border = "white",
+       main = paste("Iteration", step), xlab = "", cex.main = 0.9)
+  curve(lambda * dnorm(x, mu[1], sigma[1]), add = TRUE, col = 2, lwd = 2)
+  curve((1 - lambda) * dnorm(x, mu[2], sigma[2]), add = TRUE, col = 3, lwd = 2)
+  curve(lambda * dnorm(x, mu[1], sigma[1]) +
+        (1 - lambda) * dnorm(x, mu[2], sigma[2]),
+        add = TRUE, col = 1, lwd = 2, lty = 2)
+}
+```
+
+You can see the two component densities (red and green) gradually shift and reshape until they settle on the final fit.
+
+## MLE Approach
+
+We can also fit the mixture using direct maximum likelihood with `mle()`:
+
+```{r mle-mixture}
+library(stats4)
+
+negloglik2 <- function(lambda, mu1, s1, mu2, s2) {
+  -sum(log(lambda * dnorm(mixture_sample, mu1, s1) +
+           (1 - lambda) * dnorm(mixture_sample, mu2, s2)))
+}
+
+mle_fit <- mle(negloglik2,
+               start = list(lambda = 0.5, mu1 = 10, s1 = 5, mu2 = 30, s2 = 10),
+               method = "L-BFGS-B",
+               lower = c(0.01, -Inf, 0.1, -Inf, 0.1),
+               upper = c(0.99, Inf, Inf, Inf, Inf))
+
+cat("MLE estimates:\n")
+print(coef(mle_fit))
+```
+
+\newpage
+
+# Turtle Data — Circular Mixture
+
+## Load the Turtle Data
+
+```{r turtle-data}
+library(CircNNTSR)
+data(Turtles)
+head(Turtles)
+
+# The data is in degrees or radians — check:
+turtle_vals <- Turtles$theta  # adjust column name if needed
+hist(turtle_vals, breaks = 20, col = "lightgreen",
+     main = "Turtle Swimming Directions", xlab = "Direction")
+```
+
+## Fit with MLE
+
+```{r turtle-mle, eval=FALSE}
+# Using mle() — may need careful starting values
+negloglik_turtle <- function(lambda, mu1, s1, mu2, s2) {
+  -sum(log(lambda * dnorm(turtle_vals, mu1, s1) +
+           (1 - lambda) * dnorm(turtle_vals, mu2, s2)))
+}
+
+mle_turtle <- mle(negloglik_turtle,
+                  start = list(lambda = 0.5, mu1 = 50, s1 = 30,
+                               mu2 = 200, s2 = 30),
+                  method = "L-BFGS-B",
+                  lower = c(0.01, -Inf, 0.1, -Inf, 0.1),
+                  upper = c(0.99, Inf, Inf, Inf, Inf))
+print(coef(mle_turtle))
+```
+
+## Fit with Manual EM
+
+```{r turtle-em}
+turtle_em <- twoMix(turtle_vals)
+cat("EM results for Turtles:\n")
+cat("lambda:", turtle_em$lambda, "\n")
+cat("mu:    ", turtle_em$mu, "\n")
+cat("sigma: ", turtle_em$sigma, "\n")
+```
+
+## Fit with normalmixEM (Gold Standard)
+
+```{r turtle-normalmixem}
+set.seed(42)
+turtle_mix <- normalmixEM(turtle_vals, k = 2, maxit = 1000)
+
+cat("\nnormalmixEM results:\n")
+cat("lambda:", turtle_mix$lambda, "\n")
+cat("mu:    ", turtle_mix$mu, "\n")
+cat("sigma: ", turtle_mix$sigma, "\n")
+
+# Compare all three methods
+cat("\n--- Comparison ---\n")
+cat("Manual EM:     mu =", round(turtle_em$mu, 2),
+    "sigma =", round(turtle_em$sigma, 2), "\n")
+cat("normalmixEM:   mu =", round(turtle_mix$mu, 2),
+    "sigma =", round(turtle_mix$sigma, 2), "\n")
+```
+
+**They should agree** (up to label switching — component 1 and 2 might be swapped).
+
+\examtip{Label switching: the EM algorithm doesn't care which component is ``1'' and which is ``2''. If your manual EM gives $\mu_1=200, \mu_2=50$ and normalmixEM gives $\mu_1=50, \mu_2=200$, they're the same solution — just relabelled.}
+
+\newpage
+
+# ThreeMix Data — Fitting 2, 3, and 4 Components
+
+## Load and Explore
+
+```{r threemix-data}
+# Load the ThreeMix data
+threemix <- read.csv("ThreeMix.csv")
+x_three <- threemix$x
+
+hist(x_three, breaks = 30, col = "grey85", border = "white",
+     probability = TRUE,
+     main = "ThreeMix Data", xlab = "x")
+lines(density(x_three), col = "blue", lwd = 2)
+```
+
+## Fit 2, 3, and 4 Component Mixtures
+
+```{r threemix-fit}
+set.seed(123)
+mix_2 <- normalmixEM(x_three, k = 2, maxit = 2000, epsilon = 1e-6)
+mix_3 <- normalmixEM(x_three, k = 3, maxit = 2000, epsilon = 1e-6)
+mix_4 <- normalmixEM(x_three, k = 4, maxit = 2000, epsilon = 1e-6)
+```
+
+## Plot Each Fit
+
+```{r threemix-plots, fig.height=9}
+par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))
+xseq <- seq(min(x_three) - 5, max(x_three) + 5, length = 500)
+
+for (info in list(list(mix_2, 2), list(mix_3, 3), list(mix_4, 4))) {
+  fit <- info[[1]]; K <- info[[2]]
+  
+  hist(x_three, breaks = 30, col = "grey90", border = "white",
+       probability = TRUE,
+       main = paste0(K, "-Component Mixture"), xlab = "x")
+  
+  total <- rep(0, length(xseq))
+  for (j in 1:K) {
+    comp <- fit$lambda[j] * dnorm(xseq, fit$mu[j], fit$sigma[j])
+    lines(xseq, comp, col = j + 1, lwd = 2)
+    total <- total + comp
+  }
+  lines(xseq, total, col = 1, lwd = 2, lty = 2)
+}
+```
+
+## AIC and BIC Comparison
+
+```{r threemix-aic-bic}
+n_three <- length(x_three)
+
+calc_loglik <- function(fit) {
+  ll <- 0
+  for (i in seq_along(fit$x)) {
+    li <- sum(fit$lambda * dnorm(fit$x[i], fit$mu, fit$sigma))
+    ll <- ll + log(li)
+  }
+  ll
+}
+
+results <- data.frame(
+  K          = c(2, 3, 4),
+  Parameters = c(3*2-1, 3*3-1, 3*4-1),
+  LogLik     = c(calc_loglik(mix_2), calc_loglik(mix_3), calc_loglik(mix_4))
+)
+results$AIC <- -2 * results$LogLik + 2 * results$Parameters
+results$BIC <- -2 * results$LogLik + results$Parameters * log(n_three)
+
+print(results)
+
+cat("\nBest by AIC:", results$K[which.min(results$AIC)], "components\n")
+cat("Best by BIC:", results$K[which.min(results$BIC)], "components\n")
+```
+
+\examtip{For the AIC/BIC calculation, a $K$-component Normal mixture has $k = 3K - 1$ free parameters: $K$ means + $K$ standard deviations + $(K-1)$ mixing proportions (they must sum to 1, so only $K-1$ are free).}
+
+\newpage
+
+# Precipitation Data — Built-in
+
+## Explore
+
+```{r precip-data}
+data(precip)
+cat("Number of cities:", length(precip), "\n")
+summary(precip)
+
+hist(precip, breaks = 20, col = "lightblue", border = "white",
+     probability = TRUE, main = "Annual Rainfall — 70 US Cities",
+     xlab = "Precipitation (inches)")
+lines(density(precip), col = "blue", lwd = 2)
+```
+
+## Fit 1, 2, and 3 Component Models
+
+```{r precip-fit}
+set.seed(42)
+
+# 1-component = just a Normal distribution
+precip_1_mu    <- mean(precip)
+precip_1_sigma <- sd(precip)
+ll_1 <- sum(dnorm(precip, precip_1_mu, precip_1_sigma, log = TRUE))
+
+# 2-component mixture
+precip_mix2 <- normalmixEM(precip, k = 2, maxit = 2000)
+
+# 3-component mixture
+precip_mix3 <- normalmixEM(precip, k = 3, maxit = 2000)
+```
+
+```{r precip-plot, fig.height=7}
+par(mfrow = c(2, 1), mar = c(4, 4, 2, 1))
+xseq <- seq(0, 80, length = 500)
+
+# 2-component plot
+hist(precip, breaks = 20, col = "grey90", border = "white",
+     probability = TRUE, main = "2-Component Mixture", xlab = "Precipitation")
+total2 <- rep(0, length(xseq))
+for (j in 1:2) {
+  comp <- precip_mix2$lambda[j] * dnorm(xseq, precip_mix2$mu[j], precip_mix2$sigma[j])
+  lines(xseq, comp, col = j + 1, lwd = 2)
+  total2 <- total2 + comp
+}
+lines(xseq, total2, lty = 2, lwd = 2)
+
+# 3-component plot
+hist(precip, breaks = 20, col = "grey90", border = "white",
+     probability = TRUE, main = "3-Component Mixture", xlab = "Precipitation")
+total3 <- rep(0, length(xseq))
+for (j in 1:3) {
+  comp <- precip_mix3$lambda[j] * dnorm(xseq, precip_mix3$mu[j], precip_mix3$sigma[j])
+  lines(xseq, comp, col = j + 1, lwd = 2)
+  total3 <- total3 + comp
+}
+lines(xseq, total3, lty = 2, lwd = 2)
+```
+
+## AIC / BIC — Which Model is Best?
+
+```{r precip-compare}
+n_precip <- length(precip)
+
+ll_2 <- calc_loglik(precip_mix2)
+ll_3 <- calc_loglik(precip_mix3)
+
+precip_results <- data.frame(
+  K          = 1:3,
+  Parameters = c(2, 5, 8),
+  LogLik     = c(ll_1, ll_2, ll_3)
+)
+precip_results$AIC <- -2 * precip_results$LogLik + 2 * precip_results$Parameters
+precip_results$BIC <- -2 * precip_results$LogLik +
+                      precip_results$Parameters * log(n_precip)
+
+print(precip_results)
+
+cat("\nBest by AIC:", precip_results$K[which.min(precip_results$AIC)], "component(s)\n")
+cat("Best by BIC:", precip_results$K[which.min(precip_results$BIC)], "component(s)\n")
+```
+
+**Discussion:** BIC often favours fewer components than AIC. If AIC says 3 but BIC says 2, a 2-component model is a reasonable, parsimonious choice.
+
+\newpage
+
+# Complete Exam Summary
+
+## Key Concepts at a Glance
+
+\begin{center}
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Concept} & \textbf{What to Remember} \\
+\hline
+KDE & Smooth histogram. Bandwidth $h$ controls smoothness. Use \texttt{density()} in R. \\
+\hline
+Bandwidth & \texttt{nrd0} = rule of thumb (assumes unimodal). \texttt{ucv} = cross-validation (better for multimodal). \\
+\hline
+Bayes Classifier & $P(Y{=}1|x) = \frac{\pi_1 f_1(x)}{\pi_0 f_0(x) + \pi_1 f_1(x)}$. Classify as 1 if $> 0.5$. \\
+\hline
+Mixture Model & $f(x) = \sum_k \lambda_k \phi(x; \mu_k, \sigma_k)$. Components are sub-populations. \\
+\hline
+EM Algorithm & E-step: compute responsibilities. M-step: update parameters. Repeat. Sensitive to initial values. \\
+\hline
+AIC & $-2\log L + 2k$. Lower = better. \\
+\hline
+BIC & $-2\log L + k\log n$. Lower = better. Penalises more than AIC. \\
+\hline
+Parameters & $K$-component Normal mixture: $k = 3K - 1$ free parameters. \\
+\hline
+\end{tabular}
+\end{center}
+
+## Common Exam Mistakes to Avoid
+
+1. **Forgetting `probability = TRUE`** in `hist()` when overlaying densities — without it, the y-axis is counts, not density, and your curves won't match.
+2. **Using `nrd0` for multimodal data** — it oversmooths. Mention `ucv` or `SJ` instead.
+3. **Confusing the number of free parameters** — for $K$ components it's $3K - 1$ (not $3K$), because the $\lambda$'s must sum to 1.
+4. **Ignoring label switching** — if your EM gives components in a different order than `normalmixEM`, they're still the same solution.
+5. **Not trying multiple initial values** — EM can get stuck in local maxima. Always mention this in an exam answer.
